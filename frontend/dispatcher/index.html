@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="az">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="dispatcher_title">Dispatcher</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/shared/style.css">
+</head>
+<body>
+  <header>
+    <h1><span data-i18n="app_title"></span> · <span data-i18n="dispatcher_title"></span></h1>
+    <nav>
+      <a href="/" data-i18n="go_citizen"></a>
+      <select id="lang-select" aria-label="lang"><option value="az">AZ</option><option value="en">EN</option></select>
+    </nav>
+  </header>
+  <main>
+    <p class="muted" data-i18n="placeholder"></p>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/shared/i18n.js"></script>
+  <script src="/shared/api.js"></script>
+  <script>api.role = "dispatcher";</script>
+</body>
+</html>
