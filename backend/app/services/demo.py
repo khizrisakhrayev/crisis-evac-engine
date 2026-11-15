@@ -6,12 +6,12 @@ from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..models import SOS, Alert, Brigade, RoadEdge, Shelter
+from ..models import SOS, Alert, Brigade, RoadEdge, RouteCache, Shelter
 from ..schemas import SOSBurst, SOSCreate
 from ..seed import SHELTERS
 from . import crisis
 from . import sos as sos_svc
-from .routing_provider import invalidate_graph
+from .routing_provider import breaker, invalidate_graph
 
 M_PER_DEG_LAT = 111_320
 
@@ -42,7 +42,8 @@ def sos_burst(db: Session, body: SOSBurst) -> tuple[list[SOS], list]:
 
 
 def reset(db: Session) -> None:
-    """Clear SOS/alerts, free brigades, drop temporary and close reserve shelters, reopen roads, seed occupancy."""
+    """Clear SOS/alerts/route cache, free brigades, drop temporary + close reserve shelters, reopen roads,
+    seed occupancy, external routing API back up with a closed circuit."""
     db.execute(delete(Alert))
     db.execute(delete(SOS))
     db.execute(update(Brigade).values(status="available", target_zone_id=None, alert_id=None))
@@ -52,6 +53,8 @@ def reset(db: Session) -> None:
         db.execute(update(Shelter).where(Shelter.name == name, Shelter.is_reserve.is_(False))
                    .values(current=current, is_open=True))
     db.execute(update(RoadEdge).values(is_closed=False))
+    db.execute(delete(RouteCache))
     db.commit()
     invalidate_graph(db)
-    config.EXTERNAL_ROUTING_UP = True
+    config.EXTERNAL_MODE = "up"
+    breaker.reset()

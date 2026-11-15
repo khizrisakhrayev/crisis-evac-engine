@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title data-i18n="nav.citizen">Citizen</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/shared/style.css">
 </head>
@@ -19,6 +19,8 @@
       <a href="/dispatcher/" data-i18n="nav.dispatcher"></a>
     </nav>
   </header>
+
+  <div id="offline-notice" class="notice-offline" role="status" data-i18n="notice.offline_backup_routing" hidden></div>
 
   <div id="banner" class="banner" role="alert" hidden>
     <div>
@@ -88,8 +90,9 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
   <script src="/shared/i18n.js"></script>
+  <script src="/shared/map.js"></script>
   <script src="/shared/api.js"></script>
   <script src="/citizen.js"></script>
 </body>

@@ -29,12 +29,14 @@
     dismissedSig: null,
     activeSos: storage.getJSON("activeSos"),
     seq: 0,
+    inFlight: 0,
     lastErrorAt: 0,
     toast: null,
   };
   let map = null;
   let posMarker = null;
   let shelterLayer, routeLayer, closedLayer;
+  let tiles = { isOffline: () => false };
   let toastTimer = null;
 
   // --- identity / role -------------------------------------------------------
@@ -94,10 +96,7 @@
   // --- map ---------------------------------------------------------------------
   function initMap() {
     map = L.map("map").setView(BAKU, 12);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
+    tiles = addResilientTiles(map, () => renderMapLayers()); // no tiles -> roads drawn as vector base map
     closedLayer = L.layerGroup().addTo(map);
     routeLayer = L.layerGroup().addTo(map);
     shelterLayer = L.layerGroup().addTo(map);
@@ -122,6 +121,14 @@
   function renderMapLayers() {
     if (!map) return;
     closedLayer.clearLayers();
+    if (tiles.isOffline()) { // offline base map: every road as a thin vector line
+      for (const r of state.roads) {
+        if (r.is_closed) continue;
+        L.polyline([[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]], {
+          color: "#6b7280", weight: 3, opacity: 0.8, interactive: false,
+        }).addTo(closedLayer);
+      }
+    }
     for (const r of state.roads) {
       if (!r.is_closed) continue;
       L.polyline([[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]], {
@@ -185,6 +192,7 @@
   async function refresh() {
     if (!state.pos) { renderAll(); return; }
     const seq = ++state.seq;
+    state.inFlight += 1;
     const key = requestKey();
     const { lat, lon } = state.pos;
     const routeQs = `from_lat=${lat}&from_lon=${lon}` + (state.chosenShelterId ? `&shelter_id=${state.chosenShelterId}` : "");
@@ -207,6 +215,8 @@
       if (isNewBaseline || routeChanged) fitRoute();
     } catch (err) {
       if (seq === state.seq) showError(err, true);
+    } finally {
+      state.inFlight -= 1;
     }
   }
 
@@ -336,7 +346,13 @@
     p.className = s.priority_label === "critical" ? "prio-critical" : "";
   }
 
+  function renderOfflineNotice() {
+    // Persistent while routing is served from the local backup; disappears when the API is back online.
+    $("#offline-notice").hidden = !(state.route && state.route.degraded);
+  }
+
   function renderAll() {
+    renderOfflineNotice();
     renderProfile();
     renderSos();
     renderBanner();
@@ -427,6 +443,6 @@
     }
     verifyStoredSos();
     if (state.pos) { map.setView([state.pos.lat, state.pos.lon], 14); refresh(); }
-    setInterval(refresh, REFRESH_MS);
+    setInterval(() => { if (state.inFlight === 0) refresh(); }, REFRESH_MS); // a slow call must not be superseded
   });
 })();

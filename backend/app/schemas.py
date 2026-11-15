@@ -132,10 +132,13 @@ class RouteOut(BaseModel):
     # shelter_full | road_closed | all_shelters_full | shelter_not_accessible | no_accessible_route
     reason: str | None = None
     original_shelter_id: int | None = None
-    provider: str | None  # external | local-graph | straight-line (never straight-line when accessible)
+    provider: str | None  # external | local-graph | route-cache | static-matrix (never static-matrix if accessible)
     edge_ids: list[int] = []
     accessible: bool = False  # route restricted to wheelchair-accessible edges and shelters
     needs_medical_transport: bool = False
+    degraded: bool = False  # answer did not come from the external provider
+    mode: str = "online"  # online | fallback
+    notice_code: str | None = None  # offline_backup_routing when degraded
 
 
 class RoadOut(BaseModel):
@@ -151,9 +154,20 @@ class RoadOut(BaseModel):
     is_accessible: bool
 
 
+class BreakerOut(BaseModel):
+    state: str  # closed | open | half_open
+    consecutive_failures: int
+    seconds_until_retry: float
+    last_error: str | None = None
+
+
 class RoutingStatusOut(BaseModel):
+    mode: str  # online | fallback
+    external_mode: str  # up | down_503 | slow
     external_up: bool
+    breaker: BreakerOut
     active_provider: str
+    cache_size: int
 
 
 class ZoneStatsOut(BaseModel):

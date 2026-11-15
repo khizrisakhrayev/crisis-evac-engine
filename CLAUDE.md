@@ -3,7 +3,7 @@ Hackathon prototype (deadline 15:00). Working MVP first, no over-engineering.
 
 ## Stack
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2 + SQLite (crisis.db), WebSocket
-- Frontend: vanilla JS + Leaflet (CDN), no build step, served by FastAPI StaticFiles
+- Frontend: vanilla JS + Leaflet 1.9.4 vendored in frontend/vendor/leaflet (no CDN), no build step, served by FastAPI StaticFiles
 - Tests: pytest (+ httpx TestClient), Locust for load tests
 - Run: `source .venv/bin/activate && uvicorn backend.app.main:app --reload` (port 8000)
 - Test: `pytest -q`
@@ -11,16 +11,16 @@ Hackathon prototype (deadline 15:00). Working MVP first, no over-engineering.
 ## Layout
 backend/app/: main.py config.py db.py models.py schemas.py seed.py errors.py
 backend/app/routers/: shelters.py sos.py routing.py dispatch.py demo.py auth.py
-backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py roads.py evacuation.py crisis.py
-                       dispatch.py demo.py ws.py
+backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py circuit_breaker.py roads.py evacuation.py
+                       crisis.py dispatch.py demo.py ws.py
 frontend/citizen/ (index.html citizen.js), frontend/dispatcher/ (index.html dispatcher.js),
-frontend/shared/ (api.js i18n.js style.css)
+frontend/shared/ (api.js i18n.js map.js style.css), frontend/vendor/leaflet/
 tests/, docs/, README.md, AI_DECLARATION.md
 
 ## API contract (prefix /api)
 Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispatcher, simulator.
 "operator" below = dispatcher or simulator. Errors: {"detail": {"code", "message"}} (codes only, UI translates).
-- GET  /health, GET /auth/me, GET /shelters          -> ok; {role}; all shelters incl. closed reserves
+- GET  /health -> {status: ok, routing_mode} (always 200); GET /auth/me -> {role}; GET /shelters -> all shelters incl. closed reserves
                                                          (is_accessible, is_reserve, is_temporary)
 - GET  /zones                                        -> [{id, name, center_lat, center_lon}]
 - GET  /shelters/nearest?lat=&lon=&district=&limit=&accessible= -> open shelters with distance_m, occupancy_pct, is_full,
@@ -29,11 +29,16 @@ Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispa
 - GET  /route?from_lat=&from_lon=&shelter_id=&accessible= -> {shelter|null, path:[[lat,lon]], distance_m, eta_min,
                                                          rerouted, reason: shelter_full|road_closed|all_shelters_full|
                                                          shelter_not_accessible|no_accessible_route, original_shelter_id,
-                                                         provider, edge_ids, accessible, needs_medical_transport}
+                                                         provider: external|local-graph|route-cache|static-matrix, edge_ids,
+                                                         accessible, needs_medical_transport, degraded, mode: online|fallback,
+                                                         notice_code: offline_backup_routing|null}
 - GET  /roads                                        -> edges with from/to coordinates, is_closed, is_accessible
 - POST /roads/{id}/close, POST /roads/{id}/open      -> operator
-- GET  /routing/status                               -> {external_up, active_provider}
-- POST /routing/external/{up|down}                   -> operator; simulates external routing API outage
+- GET  /routing/status                               -> {mode, external_mode: up|down_503|slow, external_up,
+                                                         breaker: {state: closed|open|half_open, consecutive_failures,
+                                                         seconds_until_retry, last_error}, active_provider, cache_size}
+                                                         (same object in /dispatch/overview.routing; WS routing_status on change)
+- POST /routing/external/{up|down|slow}              -> operator; simulates the external API (down = HTTP 503, slow = >5 s)
 - POST /sos {lat, lon, hazard_type: fire|collapse|flood|medical, citizen_id} -> 201 SOS (one active per citizen;
                                                          priority from role, never from body)
 - GET  /sos?status=&zone_id=&priority=               -> SOS list, priority asc then newest first;
@@ -63,6 +68,13 @@ Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispa
   citizens -> one open alert per zone (later SOS grow it; no re-alert while a confirmed one is younger than the window).
   shelter_overflow: occupancy_pct > 95 when crossing upward -> one open alert per shelter.
 - Live events: routers call services.ws.publish(type, data) after commit; it never raises.
+- External routing outage (Drop 2): every external call runs with a hard timeout (EXTERNAL_TIMEOUT_S=5) behind a
+  circuit breaker (BREAKER_FAILURE_THRESHOLD=2 consecutive 503/timeouts -> open; BREAKER_COOLDOWN_S=30 -> half_open,
+  one trial call). Fallback chain: local-graph (SQLite Dijkstra) -> route-cache (last good route per origin node +
+  shelter + accessible; rejected if a road on it is closed) -> static-matrix (DistanceMatrix zone->shelter, built at
+  startup; haversine x STATIC_MATRIX_DETOUR_FACTOR if unknown). Priority citizens never get static-matrix.
+  Any non-external answer is degraded=true and the citizen UI shows notice.offline_backup_routing.
+  The map works offline: vendored Leaflet + roads drawn as vectors when OSM tiles fail (shared/map.js).
 - Priority citizens (auth.PRIORITY_ROLES): SOS priority 1 (critical), a repeat SOS never downgrades it.
   Routes are accessible-only (accessible edges + accessible shelters), never straight-line; if nothing is reachable
   return reason "no_accessible_route" with needs_medical_transport=true. Other roles may opt in with ?accessible=true.

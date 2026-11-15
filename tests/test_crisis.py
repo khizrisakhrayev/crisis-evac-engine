@@ -225,7 +225,8 @@ def test_overview_content(client):
     assert len(ov["brigades"]) == 6 and ov["alerts"][0]["status"] == "open"
     khatai = next(z for z in ov["zones"] if z["name"] == "Khatai")
     assert khatai["active_sos"] == 5 and khatai["priority_sos"] == 1
-    assert ov["routing"] == {"external_up": True, "active_provider": "external"}
+    assert ov["routing"]["mode"] == "online" and ov["routing"]["active_provider"] == "external"
+    assert ov["routing"]["breaker"]["state"] == "closed"
 
 
 def test_demo_requires_role_and_reset_clears(client):

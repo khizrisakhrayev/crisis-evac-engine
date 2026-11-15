@@ -25,9 +25,12 @@ SOS_PRIORITY_CRITICAL = 1
 SOS_PRIORITY_NORMAL = 2
 SOS_PRIORITY_LABELS = {SOS_PRIORITY_CRITICAL: "critical", SOS_PRIORITY_NORMAL: "normal"}
 
-# Routing. EXTERNAL_ROUTING_UP is toggled at runtime (POST /api/routing/external/{up|down});
-# always read it as config.EXTERNAL_ROUTING_UP, never `from config import ...`.
-EXTERNAL_ROUTING_UP = True
-EXTERNAL_ROUTING_TIMEOUT_S = 2.0
-EXTERNAL_ROUTING_LATENCY_S = 0.0  # simulated; > timeout means the external API is treated as unavailable
+# Routing / external Map & Routing API (simulated). All values are read at call time
+# (always `config.X`, never `from config import X`) so the demo toggles and tests can change them.
+EXTERNAL_MODE = "up"              # runtime: up | down_503 | slow  (POST /api/routing/external/{up|down|slow})
+EXTERNAL_TIMEOUT_S = 5.0          # hard timeout per external call
+EXTERNAL_SLOW_LATENCY_S = 6.0     # simulated response time in "slow" mode
+BREAKER_FAILURE_THRESHOLD = 2     # consecutive failures (503/timeout) that open the circuit
+BREAKER_COOLDOWN_S = 30           # open -> half_open after this many seconds
+STATIC_MATRIX_DETOUR_FACTOR = 1.3 # haversine x factor when no road distance is known
 WALKING_SPEED_KMH = 5

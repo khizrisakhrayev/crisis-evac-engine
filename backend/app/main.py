@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from .db import Base, SessionLocal, engine
 from .routers import auth, demo, dispatch, routing, shelters, sos
 from .seed import seed_if_empty
 from .services import geo
+from .services.routing_provider import build_distance_matrix
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 
@@ -21,6 +23,7 @@ async def lifespan(app: FastAPI):
     with SessionLocal() as db:
         seed_if_empty(db)
         geo.load_zones(db)
+        build_distance_matrix(db)  # static backup distances (no-op if already built)
     yield
 
 
@@ -35,6 +38,13 @@ async def validation_error(_request: Request, exc: RequestValidationError):
         "code": "validation_error", "message": "Request validation failed", "fields": fields}})
 
 
+@app.exception_handler(Exception)
+async def unhandled_error(_request: Request, exc: Exception):
+    # Last line of defence: never leak a raw traceback to clients.
+    logging.getLogger("app").exception("unhandled error", exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": {"code": "internal_error", "message": "Internal error"}})
+
+
 for r in (shelters, routing, sos, dispatch, demo, auth):
     app.include_router(r.router, prefix="/api")
 
@@ -45,5 +55,6 @@ def dispatcher_redirect():
 
 
 app.mount("/shared", StaticFiles(directory=FRONTEND / "shared"), name="shared")
+app.mount("/vendor", StaticFiles(directory=FRONTEND / "vendor"), name="vendor")  # vendored Leaflet (no CDN)
 app.mount("/dispatcher", StaticFiles(directory=FRONTEND / "dispatcher", html=True), name="dispatcher")
 app.mount("/", StaticFiles(directory=FRONTEND / "citizen", html=True), name="citizen")  # keep last

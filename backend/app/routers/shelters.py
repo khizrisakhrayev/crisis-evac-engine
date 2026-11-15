@@ -9,6 +9,7 @@ from ..schemas import NearestShelterOut, OccupancyUpdate, ShelterOut, ZoneOut
 from ..services import geo
 from ..services import crisis
 from ..services import shelters as svc
+from ..services.routing_provider import routing_mode
 from ..services.ws import publish, publish_alert
 from .auth import PRIORITY_ROLES, current_role, require_role
 
@@ -17,7 +18,7 @@ router = APIRouter(tags=["shelters"])
 
 @router.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "routing_mode": routing_mode()}  # stays 200 even when the external API is down
 
 
 @router.get("/zones", response_model=list[ZoneOut])

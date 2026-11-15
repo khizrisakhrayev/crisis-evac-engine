@@ -1,7 +1,7 @@
 """ORM models. Enum-like fields are plain strings; allowed values noted in comments."""
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from . import config
@@ -107,3 +107,27 @@ class Alert(Base):
     brigade_id: Mapped[int | None] = mapped_column(ForeignKey("brigades.id"), nullable=True)
     new_shelter_id: Mapped[int | None] = mapped_column(ForeignKey("shelters.id"), nullable=True)
     brigade_shortage: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class RouteCache(Base):
+    """Last good route per (snapped origin node, shelter, accessible) - local backup when routing is degraded."""
+    __tablename__ = "route_cache"
+    __table_args__ = (UniqueConstraint("origin_node_id", "shelter_id", "accessible", name="uq_route_cache_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    origin_node_id: Mapped[int] = mapped_column(ForeignKey("road_nodes.id"))
+    shelter_id: Mapped[int] = mapped_column(ForeignKey("shelters.id"))
+    accessible: Mapped[bool] = mapped_column(Boolean, default=False)
+    path_json: Mapped[list] = mapped_column(JSON)
+    distance_m: Mapped[int] = mapped_column(Integer)
+    edge_ids_json: Mapped[list] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class DistanceMatrix(Base):
+    """Static zone-centre -> shelter road distances (closures ignored), precomputed at startup."""
+    __tablename__ = "distance_matrix"
+    __table_args__ = (UniqueConstraint("zone_id", "shelter_id", name="uq_distance_matrix_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    zone_id: Mapped[int] = mapped_column(ForeignKey("zones.id"))
+    shelter_id: Mapped[int] = mapped_column(ForeignKey("shelters.id"))
+    distance_m: Mapped[int] = mapped_column(Integer)

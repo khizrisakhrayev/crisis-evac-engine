@@ -9,7 +9,7 @@ BAKU_LON = (49.78, 49.96)
 
 
 def test_health(client):
-    assert client.get("/api/health").json() == {"status": "ok"}
+    assert client.get("/api/health").json() == {"status": "ok", "routing_mode": "online"}
 
 
 def test_shelters_seeded(client):

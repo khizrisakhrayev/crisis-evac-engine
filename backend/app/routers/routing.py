@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..db import get_db
+from ..db import SessionLocal, get_db
 from ..errors import api_error
 from ..schemas import RoadOut, RouteOut, RoutingStatusOut
 from ..services import evacuation, roads
-from ..services.routing_provider import active_provider
+from ..services.routing_provider import breaker, routing_status
 from ..services.ws import publish
 from .auth import PRIORITY_ROLES, current_role, require_role
 
@@ -57,14 +57,26 @@ def open_road(road_id: int, db: Session = Depends(get_db)):
     return _set_closed(db, road_id, False)
 
 
+EXTERNAL_MODES = {"up": "up", "down": "down_503", "slow": "slow"}
+
+
+def _on_breaker_change(old: str, new: str) -> None:
+    """Broadcast every circuit-breaker state change to dispatchers."""
+    with SessionLocal() as s:
+        publish("routing_status", routing_status(s))
+
+
+breaker.on_state_change = _on_breaker_change
+
+
 @router.get("/routing/status", response_model=RoutingStatusOut)
-def routing_status():
-    return {"external_up": config.EXTERNAL_ROUTING_UP, "active_provider": active_provider()}
+def get_routing_status(db: Session = Depends(get_db)):
+    return routing_status(db)
 
 
 @router.post("/routing/external/{state}", response_model=RoutingStatusOut, dependencies=[OPERATOR])
-def toggle_external(state: Literal["up", "down"]):
-    config.EXTERNAL_ROUTING_UP = state == "up"  # runtime switch to demo an external API outage
-    status = routing_status()
+def toggle_external(state: Literal["up", "down", "slow"], db: Session = Depends(get_db)):
+    config.EXTERNAL_MODE = EXTERNAL_MODES[state]  # simulate the external API: up | HTTP 503 | >5 s responses
+    status = routing_status(db)
     publish("routing_status", status)
     return status

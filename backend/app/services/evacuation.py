@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..models import Shelter
-from .routing_provider import RoutingUnavailable, get_route, graph_route, load_graph
+from .routing_provider import RoutingUnavailable, get_route, graph_route, load_graph, routing_mode
 from .shelters import open_shelters_by_distance, to_nearest_out
 
 
@@ -25,10 +25,19 @@ def _eta_min(distance_m: int) -> int:
     return math.ceil(distance_m / (config.WALKING_SPEED_KMH * 1000 / 60))
 
 
+NOTICE_OFFLINE = "offline_backup_routing"
+
+
+def _degradation(degraded: bool) -> dict:
+    return dict(degraded=degraded, mode="fallback" if degraded else "online",
+                notice_code=NOTICE_OFFLINE if degraded else None)
+
+
 def _no_accessible_route() -> dict:
     return dict(shelter=None, path=[], distance_m=None, eta_min=None, rerouted=False,
                 reason="no_accessible_route", original_shelter_id=None, provider=None, edge_ids=[],
-                accessible=True, needs_medical_transport=True)
+                accessible=True, needs_medical_transport=True,
+                **_degradation(routing_mode() != "online"))  # no route at all: report the routing mode
 
 
 def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | None = None,
@@ -74,8 +83,7 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
     chosen, route = candidates[0], None
     for c in candidates:
         try:
-            route = get_route(db, from_lat, from_lon, c.lat, c.lon, allow_straight_line=False,
-                              accessible_only=accessible_only)
+            route = get_route(db, from_lat, from_lon, c, allow_last_resort=False, accessible_only=accessible_only)
             chosen = c
             break
         except RoutingUnavailable:
@@ -92,7 +100,7 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
     except RoutingUnavailable:
         blocked = False  # no road path even ignoring closures: not a closure problem
     if route is None:
-        route = get_route(db, from_lat, from_lon, chosen.lat, chosen.lon, allow_straight_line=True)
+        route = get_route(db, from_lat, from_lon, chosen, allow_last_resort=True)  # static-matrix last resort
     elif chosen.id != candidates[0].id:
         blocked = True  # first choice was unreachable on open roads
 
@@ -106,4 +114,5 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
         rerouted=rerouted, reason=reason, original_shelter_id=original_id,
         provider=route.provider, edge_ids=route.edge_ids,
         accessible=accessible_only, needs_medical_transport=False,
+        **_degradation(route.provider != "external"),
     )

@@ -94,6 +94,7 @@
       const [ov, roads] = await Promise.all([dapi("/dispatch/overview"), dapi("/roads")]);
       if (seq !== state.seq) return;
       state.pollOk = true;
+      state.routingAt = Date.now();
       const sig = JSON.stringify([ov, roads]);
       if (sig !== state.sig) {
         state.sig = sig;
@@ -162,10 +163,24 @@
     const r = state.ov && state.ov.routing;
     if (!r) { chip.hidden = true; return; }
     chip.hidden = false;
-    chip.className = `chip ${r.external_up ? "chip-ok" : "chip-warn"}`;
-    chip.textContent = r.external_up ? t("routing.up") : t("routing.fallback", { provider: label("provider", r.active_provider) });
-    $("#sim-ext-up").setAttribute("aria-pressed", String(r.external_up));
-    $("#sim-ext-down").setAttribute("aria-pressed", String(!r.external_up));
+    const b = r.breaker;
+    if (b.state === "open") {
+      const left = Math.max(0, Math.ceil(b.seconds_until_retry - (Date.now() - (state.routingAt || Date.now())) / 1000));
+      chip.className = "chip chip-bad";
+      chip.textContent = t("breaker.open", { s: left });
+    } else if (b.state === "half_open") {
+      chip.className = "chip chip-warn";
+      chip.textContent = t("breaker.half_open");
+    } else if (r.mode === "fallback") { // API failing, breaker not tripped yet (it trips on route requests)
+      chip.className = "chip chip-warn";
+      chip.textContent = t("breaker.closed_failing");
+    } else {
+      chip.className = "chip chip-ok";
+      chip.textContent = t("breaker.closed");
+    }
+    $("#sim-ext-up").setAttribute("aria-pressed", String(r.external_mode === "up"));
+    $("#sim-ext-down").setAttribute("aria-pressed", String(r.external_mode === "down_503"));
+    $("#sim-ext-slow").setAttribute("aria-pressed", String(r.external_mode === "slow"));
   }
 
   // --- red alert banner ---------------------------------------------------------------------
@@ -236,9 +251,7 @@
   // --- map --------------------------------------------------------------------------------------
   function initMap() {
     map = L.map("dmap").setView(BAKU, 12);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
+    addResilientTiles(map); // roads are always drawn as vectors, so the map works without tiles
     // Fixed drawing order regardless of re-render order.
     [["roads", 410], ["circles", 415], ["shelters", 420], ["brigades", 630], ["sos", 640], ["sim", 650]].forEach(([name, z]) => {
       map.createPane(name).style.zIndex = String(z);
@@ -500,6 +513,7 @@
     });
     $("#sim-ext-up").addEventListener("click", () => action("/routing/external/up", {}, "sim.done"));
     $("#sim-ext-down").addEventListener("click", () => action("/routing/external/down", {}, "sim.done"));
+    $("#sim-ext-slow").addEventListener("click", () => action("/routing/external/slow", {}, "sim.done"));
     $("#sim-reset").addEventListener("click", async () => {
       if (!window.confirm(t("sim.reset_confirm"))) return;
       state.confirmed = [];
@@ -538,5 +552,6 @@
     if (state.ov) { renderSimOptions(); syncSlider(); }
     connectWs();
     setInterval(() => { if (state.ov) { renderSosFeed(); renderAlerts(); } }, 15000); // time-ago + expire confirm cards
+    setInterval(() => { if (state.ov && state.ov.routing.breaker.state === "open") renderRouting(); }, 1000); // countdown
   });
 })();

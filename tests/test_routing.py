@@ -67,17 +67,17 @@ def test_requested_full_shelter_reroutes(client):
 def test_external_down_falls_back_to_local_graph(client):
     up = route(client, shelter_id=STADIUM)
     s = client.post("/api/routing/external/down", headers=OP).json()
-    assert s == {"external_up": False, "active_provider": "local-graph"}
-    assert client.get("/api/routing/status").json()["external_up"] is False
+    assert s["external_mode"] == "down_503" and s["mode"] == "fallback" and s["external_up"] is False
+    assert client.get("/api/routing/status").json()["external_mode"] == "down_503"
 
     down = route(client, shelter_id=STADIUM)
-    assert down["provider"] == "local-graph" and down["path"] == up["path"]
+    assert down["provider"] == "local-graph" and down["path"] == up["path"] and down["degraded"] is True
 
-    client.post("/api/routing/external/up", headers=OP)
+    client.post("/api/routing/external/up", headers=OP)  # one failure only: circuit still closed
     assert route(client, shelter_id=STADIUM)["provider"] == "external"
 
 
-def test_disconnected_origin_falls_back_to_straight_line(client):
+def test_disconnected_origin_falls_back_to_static_matrix(client):
     snap = route(client)["path"][1]  # origin's snapped node
     touching = [e["id"] for e in client.get("/api/roads").json()
                 if snap in ([e["from_lat"], e["from_lon"]], [e["to_lat"], e["to_lon"]])]
@@ -85,7 +85,7 @@ def test_disconnected_origin_falls_back_to_straight_line(client):
     for eid in touching:
         client.post(f"/api/roads/{eid}/close", headers=OP)
     r = route(client)
-    assert r["provider"] == "straight-line" and len(r["path"]) == 2
+    assert r["provider"] == "static-matrix" and len(r["path"]) == 2 and r["degraded"] is True
     assert r["rerouted"] is True and r["reason"] == "road_closed"
 
 
@@ -121,12 +121,14 @@ def test_graph_route_unit():
         rp.graph_route(g, 40.0, 49.0, 40.0, 49.01)
 
 
-def test_straight_line_provider():
-    r = rp.StraightLineProvider().route(None, 40.0, 49.0, 40.01, 49.01)
-    assert r.provider == "straight-line" and r.distance_m == round(haversine_m(40.0, 49.0, 40.01, 49.01))
+def test_static_matrix_never_shorter_than_direct_line(client):
+    from types import SimpleNamespace
 
-
-def test_external_timeout_simulation(monkeypatch):
-    monkeypatch.setattr(config, "EXTERNAL_ROUTING_LATENCY_S", 5.0)
+    from backend.app.db import SessionLocal
+    target = SimpleNamespace(id=999, lat=40.01, lon=49.01)  # unknown shelter: haversine x factor
+    with SessionLocal() as db:
+        r = rp.StaticMatrixProvider().route(db, None, 40.0, 49.0, target)
+    direct = haversine_m(40.0, 49.0, 40.01, 49.01)
+    assert r.provider == "static-matrix" and r.distance_m == round(direct * config.STATIC_MATRIX_DETOUR_FACTOR)
     with pytest.raises(rp.RoutingUnavailable):
-        rp.ExternalRoutingProvider(timeout_s=2.0).route(None, 40.0, 49.0, 40.01, 49.01)
+        rp.StaticMatrixProvider().route(None, None, 40.0, 49.0, target, accessible_only=True)

@@ -9,7 +9,7 @@ from ..models import Alert, Brigade, Shelter
 from . import geo
 from . import sos as sos_svc
 from .clock import utcnow
-from .routing_provider import active_provider
+from .routing_provider import routing_status
 
 
 class AlertNotFound(Exception):
@@ -112,5 +112,5 @@ def overview(db: Session) -> dict:
         brigades=list(db.scalars(select(Brigade).order_by(Brigade.id))),
         alerts=list_alerts(db, confirmed_limit=config.OVERVIEW_RECENT_CONFIRMED),
         zones=zones,
-        routing=dict(external_up=config.EXTERNAL_ROUTING_UP, active_provider=active_provider()),
+        routing=routing_status(db),
     )
