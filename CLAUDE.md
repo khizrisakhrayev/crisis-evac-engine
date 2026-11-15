@@ -13,7 +13,7 @@ backend/app/: main.py config.py db.py models.py schemas.py seed.py
 backend/app/routers/: shelters.py sos.py routing.py dispatch.py auth.py
 backend/app/services/: geo.py routing_provider.py crisis.py ws.py
 frontend/citizen/, frontend/dispatcher/, frontend/shared/ (api.js i18n.js style.css)
-tests/, docs/, README.md, AI_LOG.md
+tests/, docs/, README.md, AI_DECLARATION.md
 
 ## API contract (prefix /api)
 - GET  /shelters/nearest?lat=&lon=&district=&limit=  -> shelters with distance_m, occupancy_pct
@@ -39,7 +39,7 @@ tests/, docs/, README.md, AI_LOG.md
 
 ## MANDATORY after every task (do this without being asked)
 1. Run `pytest -q` (if tests exist) and make sure the server starts.
-2. Append an entry to AI_LOG.md: time (HH:MM), task id, what was asked, what AI generated/changed (files), how it was verified, human review status "pending".
+2. Append an entry to AI_DECLARATION.md in the existing format: date and time (YYYY-MM-DD HH:MM, local time), Tool, Prompt (the user's full prompt verbatim, in quotes, never summarized), Summary, Files changed. One entry per user prompt, including small fix prompts.
 3. `git add -A && git commit -m "<type>: <short summary>"`. One commit per task.
 4. Do NOT run `git push`. The human reviews and pushes.
 5. End your reply with a 5-line summary: files changed, how to verify, commit hash.
