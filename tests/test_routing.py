@@ -78,7 +78,8 @@ def test_external_down_falls_back_to_local_graph(client):
     assert route(client, shelter_id=STADIUM)["provider"] == "external"
 
 
-def test_disconnected_origin_falls_back_to_static_matrix(client):
+def test_disconnected_origin_falls_back_to_static_matrix(client, monkeypatch):
+    monkeypatch.setattr(config, "ENTRY_CANDIDATES", 1)  # scenario built around the single snapped entry node
     from sqlalchemy import select
 
     from backend.app.db import SessionLocal
@@ -117,7 +118,8 @@ def test_role_and_404_checks(client):
     assert client.post("/api/roads/1/close", headers={"X-Role": "simulator"}).status_code == 401
 
 
-def test_graph_route_unit():
+def test_graph_route_unit(monkeypatch):
+    monkeypatch.setattr(config, "ENTRY_CANDIDATES", 1)  # scenario built around the single snapped entry node
     g = rp.Graph(nodes={1: (40.0, 49.0), 2: (40.0, 49.01), 3: (40.01, 49.005)},
                  adj={1: [(2, 10, 850.0), (3, 11, 1200.0)], 2: [(1, 10, 850.0), (3, 12, 1200.0)],
                       3: [(1, 11, 1200.0), (2, 12, 1200.0)]}, closed=set())

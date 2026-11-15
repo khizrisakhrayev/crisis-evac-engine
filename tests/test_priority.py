@@ -1,6 +1,7 @@
 """Challenge Drop 1: priority_citizen role, critical SOS, accessible-only routing, coded errors."""
 from sqlalchemy import select
 
+from backend.app import config
 from backend.app.db import SessionLocal
 from backend.app.models import RoadEdge, Shelter, Zone
 from backend.app.services import routing_provider as rp
@@ -82,7 +83,8 @@ def test_priority_route_is_accessible(client):
     assert r["shelter"]["id"] != KHATAI_SHELTER  # nearest shelter is a basement
 
 
-def test_priority_route_avoids_stairs_used_by_normal_route(client):
+def test_priority_route_avoids_stairs_used_by_normal_route(client, monkeypatch):
+    monkeypatch.setattr(config, "ENTRY_CANDIDATES", 1)  # scenario built around the single snapped entry node
     prio = route(client, PRIO, shelter_id=STADIUM)
     normal = route(client, shelter_id=STADIUM)
     rd = roads(client)
@@ -136,7 +138,8 @@ def test_closed_edge_on_accessible_route(client):
         assert_accessible_route(client, r)
 
 
-def test_no_accessible_route_needs_medical_transport(client):
+def test_no_accessible_route_needs_medical_transport(client, monkeypatch):
+    monkeypatch.setattr(config, "ENTRY_CANDIDATES", 1)  # scenario built around the single snapped entry node
     snap = route(client, PRIO)["path"][0]  # street path starts at the snapped road node
     touching = [e for e in roads(client).values()
                 if e["is_accessible"] and snap in ([e["from_lat"], e["from_lon"]], [e["to_lat"], e["to_lon"]])]

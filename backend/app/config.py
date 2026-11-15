@@ -65,3 +65,8 @@ SIM_SPAWN_RADIUS_M = 1500        # spawn scatter around the zone centre
 SIM_TICK_S = 1.0                 # one movement step + one sim_tick broadcast per second
 SIM_MAX_CITIZENS = 500
 SIM_MAX_SPEED = 200              # time multiplier cap (walking speed x speed)
+
+# --- Route entry / direct walk ---------------------------------------------------------------------------
+ENTRY_CANDIDATES = 4              # nearest road nodes considered as the entry into the street graph
+DIRECT_WALK_M = 350               # shelter entrance closer than this (straight) -> walk directly, skip the graph
+DIRECT_WALK_DETOUR_FACTOR = 1.3   # direct walk distance = straight x this

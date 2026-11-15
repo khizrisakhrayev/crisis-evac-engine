@@ -115,9 +115,16 @@ def snap(g: Graph, lat: float, lon: float) -> int:
     return min(g.nodes, key=lambda nid: haversine_m(lat, lon, *g.nodes[nid]))
 
 
+def entry_candidates(g: Graph, lat: float, lon: float) -> list[int]:
+    """The ENTRY_CANDIDATES road nodes nearest to (lat, lon)."""
+    return sorted(g.nodes, key=lambda nid: haversine_m(lat, lon, *g.nodes[nid]))[:max(1, config.ENTRY_CANDIDATES)]
+
+
 def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=True, provider="local-graph",
                 accessible_only=False, shelter_id: int | None = None) -> RouteResult:
-    """Dijkstra from the node nearest to the origin to the shelter's access node; raises RoutingUnavailable if no path.
+    """Multi-source Dijkstra from the ENTRY_CANDIDATES nearest nodes (each seeded with its straight approach
+    distance) to the shelter's access nodes, so the entry minimising approach + street walk + access path wins
+    (accessible_only: only candidates with an accessible path can win). Raises RoutingUnavailable if no path.
 
     Path follows the stored street geometry (oriented by travel direction) plus the shelter's access path; the
     straight citizen -> first node leg is returned separately as `approach`.
@@ -125,15 +132,16 @@ def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=T
     """
     if not g.nodes:
         raise RoutingUnavailable("empty road graph")
-    src = snap(g, from_lat, from_lon)
+    sources = {nid: haversine_m(from_lat, from_lon, *g.nodes[nid]) for nid in entry_candidates(g, from_lat, from_lon)}
     options = g.access.get(shelter_id) if shelter_id is not None else None
     if not options:  # no stored access (temporary shelter / unit graphs): nearest node + straight last leg
         near = snap(g, to_lat, to_lon)
         options = [(near, [list(g.nodes[near]), [to_lat, to_lon]], haversine_m(*g.nodes[near], to_lat, to_lon))]
     targets = {node for node, _, _ in options}
-    dist = {src: 0.0}
+    dist = dict(sources)  # includes the straight approach to each entry candidate
     prev: dict[int, tuple[int, int]] = {}  # node -> (previous node, edge id)
-    heap = [(0.0, src)]
+    heap = [(d, nid) for nid, d in sources.items()]
+    heapq.heapify(heap)
     while heap:
         d, u = heapq.heappop(heap)
         targets.discard(u)
@@ -154,10 +162,11 @@ def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=T
     _, dst, tail, tail_m = min(reachable, key=lambda r: r[0])  # cheapest street walk + access path
 
     node_seq, edge_ids, n = [dst], [], dst
-    while n != src:
+    while n in prev:  # walk back to the entry node the path started from
         n, eid = prev[n]
         node_seq.append(n)
         edge_ids.append(eid)
+    src = n
     node_seq.reverse()
     edge_ids.reverse()
 
@@ -173,7 +182,7 @@ def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=T
         path.extend(geom[1:])
     path.extend(tail[1:])
     approach_m = haversine_m(from_lat, from_lon, *g.nodes[src])
-    total = approach_m + dist[dst] + tail_m
+    total = dist[dst] + tail_m  # dist already includes the approach
     return RouteResult(path=path, distance_m=round(total), provider=provider, edge_ids=edge_ids,
                        approach=[[from_lat, from_lon], list(g.nodes[src])], approach_m=round(approach_m))
 
@@ -324,12 +333,47 @@ def _remember(db: Session, graph: Graph, from_lat, from_lon, shelter, accessible
         log.warning("route cache upsert failed", exc_info=True)
 
 
+DIRECT_WALK = "direct-walk"
+
+
+def direct_walk_allowed(shelter, accessible_only: bool) -> bool:
+    return not accessible_only or bool(getattr(shelter, "is_accessible", False))
+
+
+def direct_walk(from_lat: float, from_lon: float, shelter) -> RouteResult:
+    """Straight walk origin -> shelter entrance (drawn dotted: approach == path)."""
+    seg = [[from_lat, from_lon], [shelter.lat, shelter.lon]]
+    straight = haversine_m(from_lat, from_lon, shelter.lat, shelter.lon)
+    return RouteResult(path=seg, distance_m=round(straight * config.DIRECT_WALK_DETOUR_FACTOR), provider=DIRECT_WALK,
+                       approach=[list(p) for p in seg], approach_m=round(straight))
+
+
+def walking_estimate(graph: Graph, from_lat: float, from_lon: float, shelter, accessible_only: bool = False) -> float:
+    """Total walking distance used to rank shelters (closures ignored, so closure reroutes stay visible)."""
+    straight = haversine_m(from_lat, from_lon, shelter.lat, shelter.lon)
+    try:
+        r = graph_route(graph, from_lat, from_lon, shelter.lat, shelter.lon, respect_closures=False,
+                        accessible_only=accessible_only, shelter_id=shelter.id)
+        street, approach = r.distance_m, r.approach_m
+    except RoutingUnavailable:
+        street, approach = float("inf"), float("inf")
+    if direct_walk_allowed(shelter, accessible_only) and (straight < config.DIRECT_WALK_M or straight < approach):
+        return straight * config.DIRECT_WALK_DETOUR_FACTOR
+    return street
+
+
 def get_route(db: Session, from_lat: float, from_lon: float, shelter, *, allow_last_resort: bool = True,
               accessible_only: bool = False) -> RouteResult:
-    """external -> local-graph -> route-cache [-> static-matrix]; first success wins, nothing ever raises raw.
+    """[direct-walk] external -> local-graph -> route-cache [-> static-matrix]; first success wins, nothing raises raw.
 
+    Direct walk when the shelter entrance is closer than DIRECT_WALK_M, or closer than the approach to the graph
+    entry node of the routed path (accessible mode: only to an accessible shelter).
     accessible_only never uses static-matrix (and only accessible cache entries).
     """
+    straight = haversine_m(from_lat, from_lon, shelter.lat, shelter.lon)
+    can_direct = direct_walk_allowed(shelter, accessible_only)
+    if can_direct and straight < config.DIRECT_WALK_M:
+        return direct_walk(from_lat, from_lon, shelter)
     graph = load_graph(db)
     providers = [EXTERNAL, LOCAL_GRAPH, ROUTE_CACHE]
     if allow_last_resort and not accessible_only:
@@ -344,6 +388,8 @@ def get_route(db: Session, from_lat: float, from_lon: float, shelter, *, allow_l
             continue
         if p.name in CACHEABLE:
             _remember(db, graph, from_lat, from_lon, shelter, accessible_only, result)
+        if can_direct and p.name != STATIC_MATRIX.name and result.approach_m > straight:
+            return direct_walk(from_lat, from_lon, shelter)  # entry node is farther than the shelter itself
         return result
     raise RoutingUnavailable("no provider could route")
 

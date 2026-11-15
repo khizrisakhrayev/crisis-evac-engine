@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..models import Shelter
-from .routing_provider import RoutingUnavailable, get_route, graph_route, load_graph, routing_mode
+from .routing_provider import (DIRECT_WALK, RoutingUnavailable, get_route, graph_route, load_graph, routing_mode,
+                               walking_estimate)
 from .shelters import open_shelters_by_distance, to_nearest_out
 
 
@@ -45,6 +46,10 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
     open_items = open_shelters_by_distance(db, from_lat, from_lon)
     if accessible_only:
         open_items = [i for i in open_items if i.is_accessible]
+    # Rank by total walking distance (approach + streets + access, or a direct walk), not straight distance.
+    graph = load_graph(db)
+    walk = {i.id: walking_estimate(graph, from_lat, from_lon, i, accessible_only) for i in open_items}
+    open_items.sort(key=lambda i: (walk[i.id], i.distance_m))
 
     if shelter_id is not None:
         s = db.get(Shelter, shelter_id)
@@ -92,13 +97,14 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
         return _no_accessible_route()
 
     # 3. Was the normal (closure-free) shortest path blocked by a closed road?
-    graph = load_graph(db)
     try:
         ideal = graph_route(graph, from_lat, from_lon, chosen.lat, chosen.lon, respect_closures=False,
                             accessible_only=accessible_only, shelter_id=chosen.id)
         blocked = any(eid in graph.closed for eid in ideal.edge_ids)
     except RoutingUnavailable:
         blocked = False  # no road path even ignoring closures: not a closure problem
+    if route is not None and route.provider == DIRECT_WALK:
+        blocked = False  # no roads used
     if route is None:
         route = get_route(db, from_lat, from_lon, chosen, allow_last_resort=True)  # static-matrix last resort
     elif chosen.id != candidates[0].id:
@@ -114,5 +120,5 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
         rerouted=rerouted, reason=reason, original_shelter_id=original_id,
         provider=route.provider, edge_ids=route.edge_ids, approach=route.approach, approach_m=route.approach_m,
         accessible=accessible_only, needs_medical_transport=False,
-        **_degradation(route.provider != "external"),
+        **_degradation(routing_mode() != "online" if route.provider == DIRECT_WALK else route.provider != "external"),
     )

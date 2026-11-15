@@ -33,7 +33,7 @@ Roles: citizen (default) / priority_citizen via X-Role header (no login). Staff 
 - GET  /route?from_lat=&from_lon=&shelter_id=&accessible= -> {shelter|null, path:[[lat,lon]], distance_m, eta_min,
                                                          rerouted, reason: shelter_full|road_closed|all_shelters_full|
                                                          shelter_not_accessible|no_accessible_route, original_shelter_id,
-                                                         provider: external|local-graph|route-cache|static-matrix, edge_ids,
+                                                         provider: direct-walk|external|local-graph|route-cache|static-matrix, edge_ids,
                                                          accessible, needs_medical_transport, degraded, mode: online|fallback,
                                                          notice_code: offline_backup_routing|null, approach, approach_m}
                                                          path = street geometry first road node -> shelter entrance;
@@ -110,7 +110,12 @@ Roles: citizen (default) / priority_citizen via X-Role header (no login). Staff 
   (c) OpenStreetMap contributors) - never called at runtime. Seed loads snapped node coords, edge geometry + real
   length_m, and per shelter 3 access paths (from its 3 nearest nodes); routing picks the cheapest street walk + access.
   Roads whose real walk > MAX_EDGE_DETOUR_RATIO (2.5) x straight are dropped (Sabail C-W); a node left without an
-  accessible road gets its shortest road re-linked as accessible (Sabail S-W). All providers incl. fallbacks return
+  accessible road gets its shortest road re-linked as accessible (Sabail S-W).
+- Route entry: graph_route seeds Dijkstra with the ENTRY_CANDIDATES (4) nearest nodes (each with its straight
+  approach), so the cheapest approach + streets + access wins. Direct walk (provider "direct-walk", path ==
+  approach, straight x DIRECT_WALK_DETOUR_FACTOR): shelter closer than DIRECT_WALK_M (350 m) or closer than the
+  routed entry node; accessible mode only to accessible shelters; degraded = current routing mode. recommend
+  ranks open shelters by walking_estimate (closures ignored, so the road_closed reroute still shows). All providers incl. fallbacks return
   street geometry; static-matrix stays a straight line.
 - Thresholds live in config.py, never hard-coded elsewhere.
 
