@@ -1,9 +1,15 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, computed_field
+
+from . import config
 
 HazardType = Literal["fire", "collapse", "flood", "medical"]
+SOSStatus = Literal["active", "safe", "resolved"]
+
+# DB stores naive UTC; emit ISO-8601 with 'Z' so browsers don't read it as local time.
+UTCDateTime = Annotated[datetime, PlainSerializer(lambda d: d.isoformat(timespec="seconds") + "Z", return_type=str)]
 
 
 class ORM(BaseModel):
@@ -27,12 +33,21 @@ class ShelterOut(ORM):
     current: int
     zone_id: int
     is_open: bool
-    distance_m: float | None = None
 
     @computed_field
     @property
     def occupancy_pct(self) -> float:
         return round(100 * self.current / self.capacity, 1) if self.capacity else 100.0
+
+
+class NearestShelterOut(ShelterOut):
+    distance_m: int
+    zone: str
+
+    @computed_field
+    @property
+    def is_full(self) -> bool:
+        return self.occupancy_pct >= config.REROUTE_OCCUPANCY_PCT
 
 
 class BrigadeOut(ORM):
@@ -43,10 +58,10 @@ class BrigadeOut(ORM):
 
 
 class SOSCreate(BaseModel):
-    lat: float
-    lon: float
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
     hazard_type: HazardType
-    citizen_id: str
+    citizen_id: str = Field(min_length=1, max_length=64)
 
 
 class SOSOut(ORM):
@@ -57,7 +72,7 @@ class SOSOut(ORM):
     hazard_type: str
     status: str
     zone_id: int | None
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class AlertOut(ORM):
@@ -67,7 +82,7 @@ class AlertOut(ORM):
     zone_id: int | None
     shelter_id: int | None
     status: str
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class OccupancyUpdate(BaseModel):

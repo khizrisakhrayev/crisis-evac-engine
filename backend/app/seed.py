@@ -25,7 +25,7 @@ SHELTERS = [  # name, type, zone, lat, lon, capacity, current
     ("Yasamal School Shelter", "shelter", "Yasamal", 40.3930, 49.8000, 350, 70),
     ("Tofiq Bahramov Republican Stadium", "stadium", "Narimanov", 40.3962, 49.8611, 10000, 1500),
     ("Ataturk Park", "park", "Narimanov", 40.4050, 49.8710, 2000, 400),
-    ("Baku Olympic Stadium", "stadium", "Khatai", 40.4300, 49.9197, 15000, 1200),
+    ("Baku Olympic Stadium", "stadium", "Narimanov", 40.4300, 49.9197, 15000, 1200),
     ("Khatai District Shelter", "shelter", "Khatai", 40.3880, 49.9020, 500, 150),
 ]
 

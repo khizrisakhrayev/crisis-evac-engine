@@ -44,7 +44,7 @@ def test_frontend_pages(client):
 
 
 def test_stub_returns_501(client):
-    assert client.post("/api/sos/1/safe").status_code == 501
+    assert client.get("/api/route?from_lat=40.38&from_lon=49.83").status_code == 501
 
 
 def test_dispatcher_only_route_requires_role(client):

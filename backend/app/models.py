@@ -1,14 +1,11 @@
 """ORM models. Enum-like fields are plain strings; allowed values noted in comments."""
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+from .services.clock import utcnow  # naive UTC
 
 
 class Zone(Base):
@@ -52,6 +49,10 @@ class RoadEdge(Base):
 
 class SOS(Base):
     __tablename__ = "sos"
+    # At most one active SOS per citizen (repeat SOS updates it; see services/sos.py).
+    __table_args__ = (
+        Index("uq_sos_active_citizen", "citizen_id", unique=True, sqlite_where=text("status = 'active'")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     citizen_id: Mapped[str] = mapped_column(String(64), index=True)
     lat: Mapped[float] = mapped_column(Float)
@@ -59,7 +60,7 @@ class SOS(Base):
     hazard_type: Mapped[str] = mapped_column(String(16))  # fire | collapse | flood | medical
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | safe | resolved
     zone_id: Mapped[int | None] = mapped_column(ForeignKey("zones.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class Brigade(Base):
@@ -78,4 +79,4 @@ class Alert(Base):
     zone_id: Mapped[int | None] = mapped_column(ForeignKey("zones.id"), nullable=True)
     shelter_id: Mapped[int | None] = mapped_column(ForeignKey("shelters.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="open")  # open | confirmed
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

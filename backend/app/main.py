@@ -9,6 +9,7 @@ from . import models  # noqa: F401  (register tables)
 from .db import Base, SessionLocal, engine
 from .routers import auth, dispatch, routing, shelters, sos
 from .seed import seed_if_empty
+from .services import geo
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 
@@ -18,6 +19,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         seed_if_empty(db)
+        geo.load_zones(db)
     yield
 
 
