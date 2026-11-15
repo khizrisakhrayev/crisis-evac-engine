@@ -8,6 +8,7 @@ import pytest
 # Point the app at a throwaway DB before backend modules are imported.
 _tmpdir = tempfile.mkdtemp(prefix="crisis-test-")
 os.environ["DATABASE_URL"] = f"sqlite:///{os.path.join(_tmpdir, 'test.db')}"
+os.environ["LIVE_STREET_GEOMETRY"] = "0"  # never call the public OSM router from tests
 
 from fastapi.testclient import TestClient  # noqa: E402
 

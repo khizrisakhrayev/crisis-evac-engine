@@ -70,3 +70,4 @@ SIM_MAX_SPEED = 200              # time multiplier cap (walking speed x speed)
 ENTRY_CANDIDATES = 4              # nearest road nodes considered as the entry into the street graph
 DIRECT_WALK_M = 350               # shelter entrance closer than this (straight) -> walk directly, skip the graph
 DIRECT_WALK_DETOUR_FACTOR = 1.3   # direct walk distance = straight x this
+LIVE_STREET_GEOMETRY = os.getenv("LIVE_STREET_GEOMETRY", "1") != "0"  # OSM foot router for walking legs (tests: off)

@@ -7,3 +7,5 @@ crisis.db
 .DS_Store
 crisis.db-wal
 crisis.db-shm
+docs_tmp.db*
+/TEXNIKI_IZAH.docx

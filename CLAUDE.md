@@ -115,7 +115,12 @@ Roles: citizen (default) / priority_citizen via X-Role header (no login). Staff 
   approach), so the cheapest approach + streets + access wins. Direct walk (provider "direct-walk", path ==
   approach, straight x DIRECT_WALK_DETOUR_FACTOR): shelter closer than DIRECT_WALK_M (350 m) or closer than the
   routed entry node; accessible mode only to accessible shelters; degraded = current routing mode. recommend
-  ranks open shelters by walking_estimate (closures ignored, so the road_closed reroute still shows). All providers incl. fallbacks return
+  ranks open shelters by walking_estimate (closures ignored, so the road_closed reroute still shows).
+- Live street geometry (services/street_geometry.walk_geometry): walking legs only (citizen -> entry node, and
+  direct walks) come from the public OSM foot router (3 s timeout, 500-entry cache, 60 s back-off after a failure,
+  never raises). Off when config.LIVE_STREET_GEOMETRY is False (env LIVE_STREET_GEOMETRY=0; tests) or
+  EXTERNAL_MODE != "up". Without it: a direct walk only under DIRECT_WALK_M, and approach legs stay dotted straight.
+  The simulation passes street_legs=False (no external calls for hundreds of walkers). All providers incl. fallbacks return
   street geometry; static-matrix stays a straight line.
 - Thresholds live in config.py, never hard-coded elsewhere.
 

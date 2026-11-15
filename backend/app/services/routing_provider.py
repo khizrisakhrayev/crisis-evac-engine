@@ -22,6 +22,7 @@ from . import geo
 from .circuit_breaker import CircuitBreaker
 from .clock import utcnow
 from .geo import haversine_m
+from .street_geometry import walk_geometry
 
 log = logging.getLogger(__name__)
 
@@ -388,8 +389,9 @@ def get_route(db: Session, from_lat: float, from_lon: float, shelter, *, allow_l
             continue
         if p.name in CACHEABLE:
             _remember(db, graph, from_lat, from_lon, shelter, accessible_only, result)
-        if can_direct and p.name != STATIC_MATRIX.name and result.approach_m > straight:
-            return direct_walk(from_lat, from_lon, shelter)  # entry node is farther than the shelter itself
+        if (can_direct and p.name != STATIC_MATRIX.name and result.approach_m > straight
+                and walk_geometry(from_lat, from_lon, shelter.lat, shelter.lon) is not None):
+            return direct_walk(from_lat, from_lon, shelter)  # entry node farther than the shelter; streets known
         return result
     raise RoutingUnavailable("no provider could route")
 

@@ -64,3 +64,28 @@ def test_accessible_mode_never_direct_walks_to_inaccessible_shelter(client):
     assert prio["provider"] != "direct-walk" or prio["shelter"]["is_accessible"]
     assert prio["shelter"] is None or prio["shelter"]["id"] != s.id
     assert haversine_m(lat, lon, s.lat, s.lon) < config.DIRECT_WALK_M
+
+
+def _patch_geometry(monkeypatch, fn):
+    from backend.app.services import evacuation
+    monkeypatch.setattr(evacuation, "walk_geometry", fn)
+    monkeypatch.setattr(rp, "walk_geometry", fn)
+
+
+def test_direct_walk_uses_street_geometry(client, monkeypatch):
+    s = next(x for x in open_shelters() if x.is_accessible)
+    lat, lon = offset(s.lat, s.lon, north_m=100)
+    pts = [[lat, lon], offset(s.lat, s.lon, 80, 40), offset(s.lat, s.lon, 50, 60), offset(s.lat, s.lon, 20, 30), [s.lat, s.lon]]
+    _patch_geometry(monkeypatch, lambda *a: ([list(p) for p in pts], 260.0))
+    r = client.get("/api/route", params={"from_lat": lat, "from_lon": lon}).json()
+    assert r["provider"] == "direct-walk" and len(r["path"]) == 5 and r["approach"] == []
+    assert r["distance_m"] == 260 and r["eta_min"] == math.ceil(260 / (config.WALKING_SPEED_KMH * 1000 / 60))
+
+
+def test_no_geometry_far_shelter_uses_graph(client, monkeypatch):
+    _patch_geometry(monkeypatch, lambda *a: None)
+    s = next(x for x in open_shelters() if x.access_options)
+    lat, lon = offset(s.lat, s.lon, north_m=800)
+    r = client.get("/api/route", params={"from_lat": lat, "from_lon": lon, "shelter_id": s.id}).json()
+    assert r["provider"] in ("external", "local-graph") and r["provider"] != "direct-walk"
+    assert len(r["path"]) > 2  # street geometry from the graph (access path), not a straight line

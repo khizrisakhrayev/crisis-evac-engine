@@ -88,7 +88,7 @@ class Simulation:
     # --- routing / movement ---------------------------------------------------------------------------
     def _route(self, db: Session, w: Walker) -> None:
         try:
-            r = evacuation.recommend(db, w.lat, w.lon, None, accessible_only=w.priority)
+            r = evacuation.recommend(db, w.lat, w.lon, None, accessible_only=w.priority, street_legs=False)
         except evacuation.NoShelterAvailable:
             r = {"shelter": None}
         if not r.get("shelter"):

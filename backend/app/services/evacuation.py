@@ -12,6 +12,7 @@ from ..models import Shelter
 from .routing_provider import (DIRECT_WALK, RoutingUnavailable, get_route, graph_route, load_graph, routing_mode,
                                walking_estimate)
 from .shelters import open_shelters_by_distance, to_nearest_out
+from .street_geometry import walk_geometry
 
 
 class ShelterNotFound(Exception):
@@ -41,8 +42,25 @@ def _no_accessible_route() -> dict:
                 **_degradation(routing_mode() != "online"))  # no route at all: report the routing mode
 
 
+def _street_legs(route, from_lat: float, from_lon: float, shelter) -> None:
+    """Draw the walking legs on real streets when live geometry is available (never changes the chosen shelter
+    or edges). direct-walk -> whole path; graph routes -> the citizen -> entry node leg (else stays dotted)."""
+    if route.provider == DIRECT_WALK:
+        geo_ = walk_geometry(from_lat, from_lon, shelter.lat, shelter.lon)
+        if geo_:
+            route.path, route.distance_m, route.approach, route.approach_m = geo_[0], round(geo_[1]), [], 0
+    elif route.approach and route.provider != "static-matrix" and route.approach_m > 0:
+        (alat, alon), (elat, elon) = route.approach[0], route.approach[-1]
+        geo_ = walk_geometry(alat, alon, elat, elon)
+        if geo_:
+            route.distance_m = round(route.distance_m - route.approach_m + geo_[1])
+            route.path = geo_[0][:-1] + route.path
+            route.approach, route.approach_m = [], round(geo_[1])
+
+
 def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | None = None,
-              accessible_only: bool = False) -> dict:
+              accessible_only: bool = False, street_legs: bool = True) -> dict:
+    """street_legs=False skips live walking geometry (the evacuation simulation routes hundreds of walkers)."""
     open_items = open_shelters_by_distance(db, from_lat, from_lon)
     if accessible_only:
         open_items = [i for i in open_items if i.is_accessible]
@@ -109,6 +127,9 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
         route = get_route(db, from_lat, from_lon, chosen, allow_last_resort=True)  # static-matrix last resort
     elif chosen.id != candidates[0].id:
         blocked = True  # first choice was unreachable on open roads
+
+    if street_legs:
+        _street_legs(route, from_lat, from_lon, chosen)
 
     if blocked and reason is None:
         rerouted, reason = True, "road_closed"
