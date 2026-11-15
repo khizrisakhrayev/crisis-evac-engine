@@ -81,7 +81,7 @@ source .venv/bin/activate
 pytest -q
 ```
 
-The suite has 10 test files and 112 tests; all 112 pass (`pytest -q`, about 1.4 s). It runs against a throwaway SQLite file in a temp directory and never
+The suite has 11 test files and 117 tests; all 117 pass (`pytest -q`, about 1.4 s). It runs against a throwaway SQLite file in a temp directory and never
 touches `crisis.db`. Time-based rules (the 5-minute Red Alert window, the circuit-breaker cooldown, the rate limits)
 are tested with injectable or fake clocks rather than real waiting; the slow-API test uses a small timeout.
 

@@ -141,6 +141,12 @@
       L.polyline(route.path, { color: "#ffffff", weight: 12, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false }).addTo(routeLayer);
       L.polyline(route.path, { color: "#1d4ed8", weight: 7, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false }).addTo(routeLayer);
     }
+    // Dashed connectors for any remaining gap (> CONNECTOR_GAP_M): position -> route start, route end -> shelter.
+    if (route && route.path && route.path.length && state.pos) {
+      const start = route.approach && route.approach.length > 1 ? route.approach[0] : route.path[0];
+      connector([state.pos.lat, state.pos.lon], start);
+      if (route.shelter) connector(route.path[route.path.length - 1], [route.shelter.lat, route.shelter.lon]);
+    }
     shelterLayer.clearLayers();
     const shown = [...state.nearest];
     if (route && route.shelter && !shown.some((s) => s.id === route.shelter.id)) shown.push(route.shelter);
@@ -155,6 +161,13 @@
       m.on("click", () => chooseShelter(s.id));
       m.addTo(shelterLayer);
     }
+  }
+
+  const CONNECTOR_GAP_M = 15;
+  function connector(a, b) {
+    if (!a || !b || map.distance(a, b) <= CONNECTOR_GAP_M) return;
+    L.polyline([a, b], { color: "#1d4ed8", weight: 4, dashArray: "6 10", opacity: 0.8, lineCap: "round",
+      interactive: false }).addTo(routeLayer);
   }
 
   const roadLine = (r) => (r.geometry && r.geometry.length > 1 ? r.geometry : [[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]]);

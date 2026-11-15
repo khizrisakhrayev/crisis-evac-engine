@@ -386,7 +386,7 @@ addım (m) = 5 000 / 3 600 · sürət əmsalı · SIM_TICK_S
 
 ## 7. Testləşdirmə yanaşması və nəticələr
 
-- **Həcm:** 10 test faylı, 112 test (`pytest --collect-only -q`); `pytest -q`: 112 testin hamısı uğurla keçir (1,35 saniyə).
+- **Həcm:** 11 test faylı, 117 test (`pytest --collect-only -q`); `pytest -q`: 117 testin hamısı uğurla keçir (1,38 saniyə).
 - **Əhatə:**
 
 | Fayl | Testlər | Nə yoxlanılır |
