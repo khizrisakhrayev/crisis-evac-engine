@@ -19,20 +19,12 @@ def client():
 
 
 def reset_state():
-    """Reopen all roads, restore seeded shelter occupancy/open flags, external routing up."""
-    from sqlalchemy import update
-
-    from backend.app import config
+    """Demo reset: clears SOS/alerts, frees brigades, closes reserves, reopens roads, seed occupancy."""
     from backend.app.db import SessionLocal
-    from backend.app.models import RoadEdge, Shelter
-    from backend.app.seed import SHELTERS
+    from backend.app.services import demo
 
-    config.EXTERNAL_ROUTING_UP = True
     with SessionLocal() as db:
-        db.execute(update(RoadEdge).values(is_closed=False))
-        for i, (*_, current) in enumerate(SHELTERS, start=1):
-            db.execute(update(Shelter).where(Shelter.id == i).values(current=current, is_open=True))
-        db.commit()
+        demo.reset(db)
 
 
 @pytest.fixture(autouse=True)

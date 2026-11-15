@@ -14,7 +14,8 @@ def test_health(client):
 
 def test_shelters_seeded(client):
     data = client.get("/api/shelters").json()
-    assert len(data) == 10
+    assert len(data) == 14  # 10 open + 4 closed reserves
+    assert sum(s["is_open"] for s in data) == 10 and sum(s["is_reserve"] for s in data) == 4
     assert all("occupancy_pct" in s for s in data)
 
 
@@ -23,7 +24,7 @@ def test_seed_counts_and_idempotent(client):
         assert seed_if_empty(db) is False
         count = lambda m: db.scalar(select(func.count()).select_from(m))  # noqa: E731
         assert count(Zone) == 5
-        assert count(Shelter) == 10
+        assert count(Shelter) == 14
         assert count(Brigade) == 6
         assert count(RoadNode) == 25
         assert count(RoadEdge) == 45
@@ -43,9 +44,10 @@ def test_frontend_pages(client):
     assert client.get("/shared/i18n.js").status_code == 200
 
 
-def test_dispatcher_only_stub_requires_role(client):
+def test_confirm_requires_dispatcher_role(client):
     assert client.post("/api/dispatch/alerts/1/confirm").status_code == 403
-    assert client.post("/api/dispatch/alerts/1/confirm", headers={"X-Role": "dispatcher"}).status_code == 501
+    r = client.post("/api/dispatch/alerts/999/confirm", headers={"X-Role": "dispatcher"})
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "alert_not_found"
 
 
 def test_sqlite_wal_enabled(client):

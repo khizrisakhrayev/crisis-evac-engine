@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models  # noqa: F401  (register tables)
 from .db import Base, SessionLocal, engine
-from .routers import auth, dispatch, routing, shelters, sos
+from .routers import auth, demo, dispatch, routing, shelters, sos
 from .seed import seed_if_empty
 from .services import geo
 
@@ -35,7 +35,7 @@ async def validation_error(_request: Request, exc: RequestValidationError):
         "code": "validation_error", "message": "Request validation failed", "fields": fields}})
 
 
-for r in (shelters, routing, sos, dispatch, auth):
+for r in (shelters, routing, sos, dispatch, demo, auth):
     app.include_router(r.router, prefix="/api")
 
 

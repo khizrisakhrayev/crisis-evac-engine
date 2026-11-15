@@ -9,6 +9,7 @@ from ..errors import api_error
 from ..schemas import RoadOut, RouteOut, RoutingStatusOut
 from ..services import evacuation, roads
 from ..services.routing_provider import active_provider
+from ..services.ws import publish
 from .auth import PRIORITY_ROLES, current_role, require_role
 
 router = APIRouter(tags=["routing"])
@@ -42,6 +43,7 @@ def _set_closed(db: Session, road_id: int, closed: bool):
     road = roads.set_closed(db, road_id, closed)
     if road is None:
         raise api_error(404, "road_not_found", "Road not found")
+    publish("road_updated", road)
     return road
 
 
@@ -63,4 +65,6 @@ def routing_status():
 @router.post("/routing/external/{state}", response_model=RoutingStatusOut, dependencies=[OPERATOR])
 def toggle_external(state: Literal["up", "down"]):
     config.EXTERNAL_ROUTING_UP = state == "up"  # runtime switch to demo an external API outage
-    return routing_status()
+    status = routing_status()
+    publish("routing_status", status)
+    return status

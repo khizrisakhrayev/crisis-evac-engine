@@ -12,6 +12,14 @@ SOS_CLUSTER_COUNT = 4
 SOS_CLUSTER_RADIUS_M = 500
 SOS_CLUSTER_WINDOW_MIN = 5
 
+# Red Alert (codes only; UI translates).
+ALERT_SEVERITY = "red"
+ALERT_ACTION_CODE = "dispatch_brigade_and_open_shelter"
+TEMP_SHELTER_CAPACITY = 500  # temporary assembly point when no reserve shelter is left
+OVERVIEW_RECENT_CONFIRMED = 20
+# Demo SOS burst scatter radius. <= 250 m keeps every pair < SOS_CLUSTER_RADIUS_M, so a burst always clusters.
+DEMO_BURST_RADIUS_M = 240
+
 # SOS priority: lower number = more urgent. Labels are codes, translated by the UI.
 SOS_PRIORITY_CRITICAL = 1
 SOS_PRIORITY_NORMAL = 2

@@ -12,6 +12,11 @@ SOSStatus = Literal["active", "safe", "resolved"]
 UTCDateTime = Annotated[datetime, PlainSerializer(lambda d: d.isoformat(timespec="seconds") + "Z", return_type=str)]
 
 
+def occupancy_pct(current: int, capacity: int) -> float:
+    """Single definition of occupancy % (1 decimal) used by API output and alert rules."""
+    return round(100 * current / capacity, 1) if capacity else 100.0
+
+
 class ORM(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,11 +39,13 @@ class ShelterOut(ORM):
     zone_id: int
     is_open: bool
     is_accessible: bool
+    is_reserve: bool = False
+    is_temporary: bool = False
 
     @computed_field
     @property
     def occupancy_pct(self) -> float:
-        return round(100 * self.current / self.capacity, 1) if self.capacity else 100.0
+        return occupancy_pct(self.current, self.capacity)
 
 
 class NearestShelterOut(ShelterOut):
@@ -54,8 +61,10 @@ class NearestShelterOut(ShelterOut):
 class BrigadeOut(ORM):
     id: int
     name: str
-    status: str
+    status: str  # available | dispatched
     zone_id: int
+    target_zone_id: int | None = None
+    alert_id: int | None = None
 
 
 class SOSCreate(BaseModel):
@@ -85,12 +94,29 @@ class SOSOut(ORM):
 
 class AlertOut(ORM):
     id: int
-    kind: str
-    reason: str
+    kind: str  # sos_cluster | shelter_overflow
+    severity: str  # red
     zone_id: int | None
     shelter_id: int | None
-    status: str
+    lat: float
+    lon: float
+    sos_count: int
+    sos_ids: list[int]
+    has_priority_sos: bool
+    status: str  # open | confirmed
+    action_code: str  # dispatch_brigade_and_open_shelter
     created_at: UTCDateTime
+    confirmed_at: UTCDateTime | None = None
+    brigade_id: int | None = None
+    new_shelter_id: int | None = None
+    brigade_shortage: bool = False
+
+
+class SOSBurst(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    count: int = Field(4, ge=1, le=50)
+    hazard_type: HazardType = "fire"
 
 
 class OccupancyUpdate(BaseModel):
@@ -128,3 +154,30 @@ class RoadOut(BaseModel):
 class RoutingStatusOut(BaseModel):
     external_up: bool
     active_provider: str
+
+
+class ZoneStatsOut(BaseModel):
+    id: int
+    name: str
+    active_sos: int
+    priority_sos: int
+
+
+class OverviewOut(BaseModel):
+    sos: list[SOSOut]
+    shelters: list[ShelterOut]
+    brigades: list[BrigadeOut]
+    alerts: list[AlertOut]
+    zones: list[ZoneStatsOut]
+    routing: RoutingStatusOut
+
+
+class ConfirmOut(BaseModel):
+    alert: AlertOut
+    brigade: BrigadeOut | None
+    shelter: ShelterOut
+
+
+class BurstOut(BaseModel):
+    sos: list[SOSOut]
+    alerts: list[AlertOut]

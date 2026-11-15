@@ -36,10 +36,12 @@ def nearest_shelters(db: Session, lat: float | None, lon: float | None,
     return items[:limit]
 
 
-def set_occupancy(db: Session, shelter_id: int, current: int) -> Shelter | None:
+def set_occupancy(db: Session, shelter_id: int, current: int) -> tuple[Shelter, int] | None:
+    """Clamp to 0..capacity. Returns (shelter, previous current) or None if missing."""
     shelter = db.get(Shelter, shelter_id)
     if shelter is None:
         return None
+    previous = shelter.current
     shelter.current = max(0, min(current, shelter.capacity))
     db.commit()
-    return shelter
+    return shelter, previous

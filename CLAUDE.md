@@ -10,15 +10,17 @@ Hackathon prototype (deadline 15:00). Working MVP first, no over-engineering.
 
 ## Layout
 backend/app/: main.py config.py db.py models.py schemas.py seed.py errors.py
-backend/app/routers/: shelters.py sos.py routing.py dispatch.py auth.py
-backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py roads.py evacuation.py crisis.py ws.py
+backend/app/routers/: shelters.py sos.py routing.py dispatch.py demo.py auth.py
+backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py roads.py evacuation.py crisis.py
+                       dispatch.py demo.py ws.py
 frontend/citizen/, frontend/dispatcher/, frontend/shared/ (api.js i18n.js style.css)
 tests/, docs/, README.md, AI_DECLARATION.md
 
 ## API contract (prefix /api)
 Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispatcher, simulator.
 "operator" below = dispatcher or simulator. Errors: {"detail": {"code", "message"}} (codes only, UI translates).
-- GET  /health, GET /auth/me, GET /shelters          -> ok; {role}; all shelters (with is_accessible)
+- GET  /health, GET /auth/me, GET /shelters          -> ok; {role}; all shelters incl. closed reserves
+                                                         (is_accessible, is_reserve, is_temporary)
 - GET  /shelters/nearest?lat=&lon=&district=&limit=  -> open shelters with distance_m, occupancy_pct, is_full, zone, is_accessible
 - POST /shelters/{id}/occupancy {current}            -> operator; clamps 0..capacity
 - GET  /route?from_lat=&from_lon=&shelter_id=&accessible= -> {shelter|null, path:[[lat,lon]], distance_m, eta_min,
@@ -34,13 +36,30 @@ Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispa
 - GET  /sos?status=&zone_id=&priority=               -> SOS list, priority asc then newest first;
                                                          items have priority, priority_label (critical|normal), is_priority_citizen
 - POST /sos/{id}/safe                                -> marks citizen safe
-- GET  /dispatch/overview                            -> sos list, shelters, brigades, alerts
-- POST /dispatch/alerts/{id}/confirm                 -> dispatch brigade + open new shelter
-- WS   /ws/dispatch                                  -> live events
+- GET  /dispatch/overview                            -> dispatcher; {sos (active, priority first), shelters, brigades,
+                                                         alerts (open first, then last 20 confirmed),
+                                                         zones:[{id,name,active_sos,priority_sos}], routing}
+- GET  /dispatch/alerts?status=open|confirmed         -> dispatcher; Alert: {id, kind: sos_cluster|shelter_overflow,
+                                                         severity: red, zone_id, shelter_id, lat, lon, sos_count, sos_ids,
+                                                         has_priority_sos, status: open|confirmed, action_code,
+                                                         created_at, confirmed_at, brigade_id, new_shelter_id, brigade_shortage}
+- POST /dispatch/alerts/{id}/confirm                 -> dispatcher; one transaction: nearest available brigade dispatched,
+                                                         nearest closed reserve opened (else temporary assembly_point at
+                                                         zone centre); returns {alert, brigade|null, shelter}; 409 if twice
+- POST /dispatch/brigades/{id}/release               -> dispatcher; brigade back to available
+- POST /demo/sos-burst {lat, lon, count=4, hazard_type} -> operator; distinct citizens within 240 m (fires an alert)
+- POST /demo/reset                                   -> operator; clear SOS/alerts, free brigades, close reserves, reset roads
+- WS   /ws/dispatch                                  -> {type, data}; types: hello, sos_created, sos_updated, shelter_updated,
+                                                         road_updated, alert_created, alert_updated, alert_confirmed,
+                                                         brigade_updated, routing_status, demo_reset
 
 ## Domain rules
 - Reroute citizen when a road on the path is closed OR the shelter is >= 90% full.
-- Red Alert when >= 4 distinct SOS within 500 m (or same zone) in 5 minutes, OR a shelter > 95% full.
+- Red Alert (services/crisis.py, pure rule functions + DB wrappers):
+  sos_cluster: active SOS from the last 5 min that are in the new SOS's zone OR within 500 m of it, >= 4 distinct
+  citizens -> one open alert per zone (later SOS grow it; no re-alert while a confirmed one is younger than the window).
+  shelter_overflow: occupancy_pct > 95 when crossing upward -> one open alert per shelter.
+- Live events: routers call services.ws.publish(type, data) after commit; it never raises.
 - Priority citizens (auth.PRIORITY_ROLES): SOS priority 1 (critical), a repeat SOS never downgrades it.
   Routes are accessible-only (accessible edges + accessible shelters), never straight-line; if nothing is reachable
   return reason "no_accessible_route" with needs_medical_transport=true. Other roles may opt in with ?accessible=true.

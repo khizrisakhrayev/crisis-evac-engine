@@ -6,6 +6,7 @@ from ..errors import api_error
 from ..schemas import SOSCreate, SOSOut, SOSStatus
 from ..services import crisis
 from ..services import sos as svc
+from ..services.ws import publish, publish_alert
 from .auth import PRIORITY_ROLES, current_role
 
 router = APIRouter(tags=["sos"])
@@ -14,8 +15,11 @@ router = APIRouter(tags=["sos"])
 @router.post("/sos", response_model=SOSOut, status_code=201)
 def create_sos(body: SOSCreate, role: str = Depends(current_role), db: Session = Depends(get_db)):
     sos = svc.submit_sos(db, body, priority_citizen=role in PRIORITY_ROLES)
-    crisis.on_sos_created(db, sos)
-    return sos
+    out = SOSOut.model_validate(sos)
+    alert_event = crisis.on_sos_created(db, sos)
+    publish("sos_created", out)
+    publish_alert(alert_event)
+    return out
 
 
 @router.get("/sos", response_model=list[SOSOut])
@@ -29,4 +33,6 @@ def mark_safe(sos_id: int, db: Session = Depends(get_db)):
     sos = svc.mark_safe(db, sos_id)
     if sos is None:
         raise api_error(404, "sos_not_found", "SOS not found")
-    return sos
+    out = SOSOut.model_validate(sos)
+    publish("sos_updated", out)
+    return out

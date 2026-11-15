@@ -7,7 +7,9 @@ from ..errors import api_error
 from ..models import Shelter
 from ..schemas import NearestShelterOut, OccupancyUpdate, ShelterOut
 from ..services import geo
+from ..services import crisis
 from ..services import shelters as svc
+from ..services.ws import publish, publish_alert
 from .auth import require_role
 
 router = APIRouter(tags=["shelters"])
@@ -47,7 +49,12 @@ def nearest_shelters(
 @router.post("/shelters/{shelter_id}/occupancy", response_model=ShelterOut,
              dependencies=[Depends(require_role("dispatcher", "simulator"))])
 def update_occupancy(shelter_id: int, body: OccupancyUpdate, db: Session = Depends(get_db)):
-    shelter = svc.set_occupancy(db, shelter_id, body.current)
-    if shelter is None:
+    result = svc.set_occupancy(db, shelter_id, body.current)
+    if result is None:
         raise api_error(404, "shelter_not_found", "Shelter not found")
-    return shelter
+    shelter, previous = result
+    out = ShelterOut.model_validate(shelter)
+    alert_event = crisis.on_shelter_updated(db, shelter, previous)
+    publish("shelter_updated", out)
+    publish_alert(alert_event)
+    return out

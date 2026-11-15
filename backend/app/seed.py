@@ -1,4 +1,4 @@
-"""Idempotent seed for Baku: 5 zones, 10 shelters, 6 brigades, 25-node / 45-edge road graph.
+"""Idempotent seed for Baku: 5 zones, 10 shelters + 4 closed reserves, 6 brigades, 25-node / 45-edge road graph.
 
 Coordinates are approximate (real landmarks, rounded); good enough for a demo map.
 """
@@ -31,6 +31,14 @@ SHELTERS = [  # name, type, zone, lat, lon, capacity, current
 
 # Basement / stair-access shelters: not wheelchair accessible (7 of 10 remain accessible).
 INACCESSIBLE_SHELTERS = {"Nasimi Civil Defence Shelter", "Yasamal School Shelter", "Khatai District Shelter"}
+
+# Reserve assembly points: closed until a confirmed Red Alert opens the nearest one.
+RESERVE_SHELTERS = [  # name, type, zone, lat, lon, capacity, is_accessible
+    ("Reserve: Baku Crystal Hall Grounds", "stadium", "Sabail", 40.3443, 49.8500, 8000, True),
+    ("Reserve: Khatai Sports Complex", "stadium", "Khatai", 40.3800, 49.9110, 3000, True),
+    ("Reserve: Narimanov Park", "park", "Narimanov", 40.4085, 49.8620, 2500, True),
+    ("Reserve: Yasamal School No. 2 Gym", "shelter", "Yasamal", 40.3800, 49.8000, 600, False),
+]
 
 BRIGADES = [  # name, zone
     ("Fire Brigade 1", "Nasimi"),
@@ -73,6 +81,11 @@ def seed_if_empty(db: Session) -> bool:
         Shelter(name=n, type=t, zone_id=zones[z].id, lat=la, lon=lo, capacity=cap, current=cur, is_open=True,
                 is_accessible=n not in INACCESSIBLE_SHELTERS)
         for n, t, z, la, lo, cap, cur in SHELTERS
+    )
+    db.add_all(
+        Shelter(name=n, type=t, zone_id=zones[z].id, lat=la, lon=lo, capacity=cap, current=0, is_open=False,
+                is_accessible=acc, is_reserve=True)
+        for n, t, z, la, lo, cap, acc in RESERVE_SHELTERS
     )
     db.add_all(Brigade(name=n, status="available", zone_id=zones[z].id) for n, z in BRIGADES)
 
