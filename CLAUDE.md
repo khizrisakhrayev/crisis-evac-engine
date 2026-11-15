@@ -39,7 +39,7 @@ tests/, docs/, README.md, AI_DECLARATION.md
 
 ## MANDATORY after every task (do this without being asked)
 1. Run `pytest -q` (if tests exist) and make sure the server starts.
-2. Append an entry to AI_DECLARATION.md in the existing format: date and time (YYYY-MM-DD HH:MM, local time), Tool, Prompt (the user's full prompt verbatim, in quotes, never summarized), Summary, Files changed. One entry per user prompt, including small fix prompts.
+2. Append an entry to AI_DECLARATION.md in the existing format (## date time, Tool, Prompt condensed to key requirements, Summary in 1-2 sentences, Files changed). Keep entries short. One entry per task.
 3. `git add -A && git commit -m "<type>: <short summary>"`. One commit per task.
 4. Do NOT run `git push`. The human reviews and pushes.
 5. End your reply with a 5-line summary: files changed, how to verify, commit hash.
