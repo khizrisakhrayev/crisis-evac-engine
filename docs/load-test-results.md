@@ -49,7 +49,7 @@ Mean < 300 ms: YES (116.0 ms)
 | 3 | plus a raw ASGI gate: an IP over its limit gets 429 before routing and parsing | 733 ms | 1443 ms |
 | 4 | same server, flood fired from 6 client processes instead of 1 | **116 ms** | **211 ms** |
 
-Cause of runs 1 and 2: every rejected request went through the 40-thread pool (a sync route plus sync
+Cause of run 1: every rejected request went through the 40-thread pool (a sync route plus sync
 dependencies), so 600 requests queued behind each other. Runs 2 and 3 were limited by the client. One Python
 httpx client needed about 0.8 s just to issue 600 concurrent requests, while the server answers in about 0.5 ms
 each (measured sequentially over keep-alive). With all requests sent at once, the mean latency is about half the

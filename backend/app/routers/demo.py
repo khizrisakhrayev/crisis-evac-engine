@@ -32,7 +32,7 @@ def sos_burst(body: SOSBurst, db: Session = Depends(get_db)):
 
 @router.post("/demo/reset")
 def reset(db: Session = Depends(get_db)):
-    simulation.stop()
+    publish("sim_tick", simulation.clear())  # dispatcher removes the walkers and the status bar
     svc.reset(db)
     publish("demo_reset", {})
     return {"status": "ok"}

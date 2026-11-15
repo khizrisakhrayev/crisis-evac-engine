@@ -49,3 +49,10 @@ def test_simulate_api_requires_staff_and_stops(client):
     stop = client.post("/api/demo/simulate/stop", headers=STAFF)
     assert stop.status_code == 200 and stop.json()["running"] is False
     assert client.post("/api/demo/simulate", json={"citizens": 5, "zone_id": 999}, headers=STAFF).status_code == 404
+
+
+def test_demo_reset_clears_simulation(client):
+    client.post("/api/demo/simulate", json={"citizens": 5, "speed": 10}, headers=STAFF)
+    client.post("/api/demo/reset", headers=STAFF)
+    from backend.app.services.simulation import simulation
+    assert simulation.running is False and simulation.walkers == []

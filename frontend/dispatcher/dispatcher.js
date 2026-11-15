@@ -121,6 +121,13 @@
     state.refreshTimer = setTimeout(() => { state.refreshTimer = null; load(); }, wait);
   }
 
+  // The overview is cached for 1 s server-side: one trailing refetch after the last change picks up
+  // anything that landed inside the cache window.
+  function trailingRefresh() {
+    clearTimeout(state.trailTimer);
+    state.trailTimer = setTimeout(() => { state.trailTimer = null; if (authToken.get()) load(); }, 1100);
+  }
+
   function connectWs() {
     if (state.ws || !authToken.get()) return;
     let ws;
@@ -141,7 +148,7 @@
       for (const m of events) {
         if (m && m.type === "sim_tick") onSimTick(m.data); else other = true;
       }
-      if (other) requestRefresh();
+      if (other) { requestRefresh(); trailingRefresh(); }
     };
     ws.onerror = () => { /* onclose follows */ };
     ws.onclose = () => {
@@ -175,6 +182,7 @@
     stopPolling();
     clearTimeout(state.reconnectTimer); state.reconnectTimer = null;
     clearTimeout(state.refreshTimer); state.refreshTimer = null;
+    clearTimeout(state.trailTimer); state.trailTimer = null;
     const ws = state.ws;
     state.ws = null; state.wsOpen = false;
     if (ws) try { ws.close(); } catch (e) { /* already closed */ }
@@ -535,6 +543,7 @@
       return null;
     } finally {
       requestRefresh();
+      trailingRefresh();
     }
   }
 

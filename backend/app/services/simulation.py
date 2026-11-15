@@ -72,6 +72,13 @@ class Simulation:
             self.running = True
             return self.status()
 
+    def clear(self) -> dict:
+        """Stop and forget all walkers (demo reset)."""
+        with self.lock:
+            self.generation += 1
+            self.running, self.walkers, self.counters = False, [], Counter()
+            return self.status(positions=True)
+
     def stop(self) -> dict:
         with self.lock:
             self.generation += 1

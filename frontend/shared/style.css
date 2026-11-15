@@ -255,6 +255,7 @@ select.btn { flex: 1; min-width: 160px; }
 .theme-dark .leaflet-tooltip { background: var(--card); color: var(--fg); border-color: var(--border); }
 .theme-dark .leaflet-bar a { background: var(--card); color: var(--fg); border-color: var(--border); }
 .theme-dark .tag-muted { background: var(--card-2); color: var(--muted); border: 1px solid var(--border); }
+.theme-dark .feed .tag-priority, .theme-dark .toast.error { background: #b91c1c; color: #fff; }  /* >= 4.5:1 with white */
 
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: var(--s1) var(--s3); border-radius: 999px; font-weight: 700; font-size: .8rem; border: 1px solid currentColor; white-space: nowrap; }
 .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -378,7 +379,7 @@ select.btn { flex: 1; min-width: 160px; }
 .evac-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: #38bdf8; animation: evac-blink 1s ease-in-out infinite; }
 .evac-bar.done .evac-dot { background: var(--ok); animation: none; }
 @keyframes evac-blink { 50% { opacity: .3; } }
-.evac-bar .btn { min-height: 32px; background: var(--danger); border-color: var(--danger); color: #fff; border-radius: 999px; }
+.evac-bar .btn { min-height: 32px; background: #b91c1c; border-color: #b91c1c; color: #fff; border-radius: 999px; }
 .lg-walker { width: 10px; height: 10px; border-radius: 50%; background: #38bdf8; border: 1px solid #0b1220; }
 .sim .row label { flex: 1 1 100px; }
 .sim input[type=number] { width: 100%; }
