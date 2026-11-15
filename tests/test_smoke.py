@@ -43,10 +43,15 @@ def test_frontend_pages(client):
     assert client.get("/shared/i18n.js").status_code == 200
 
 
-def test_stub_returns_501(client):
-    assert client.get("/api/route?from_lat=40.38&from_lon=49.83").status_code == 501
+def test_dispatcher_only_stub_requires_role(client):
+    assert client.post("/api/dispatch/alerts/1/confirm").status_code == 403
+    assert client.post("/api/dispatch/alerts/1/confirm", headers={"X-Role": "dispatcher"}).status_code == 501
 
 
-def test_dispatcher_only_route_requires_role(client):
-    assert client.post("/api/roads/1/close").status_code == 403
-    assert client.post("/api/roads/1/close", headers={"X-Role": "dispatcher"}).status_code == 501
+def test_sqlite_wal_enabled(client):
+    from sqlalchemy import text
+
+    from backend.app.db import engine
+    with engine.connect() as conn:
+        assert conn.execute(text("PRAGMA journal_mode")).scalar() == "wal"
+        assert conn.execute(text("PRAGMA busy_timeout")).scalar() == 5000

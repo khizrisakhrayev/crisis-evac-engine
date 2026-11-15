@@ -11,17 +11,25 @@ Hackathon prototype (deadline 15:00). Working MVP first, no over-engineering.
 ## Layout
 backend/app/: main.py config.py db.py models.py schemas.py seed.py
 backend/app/routers/: shelters.py sos.py routing.py dispatch.py auth.py
-backend/app/services/: geo.py routing_provider.py crisis.py ws.py
+backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py roads.py evacuation.py crisis.py ws.py
 frontend/citizen/, frontend/dispatcher/, frontend/shared/ (api.js i18n.js style.css)
 tests/, docs/, README.md, AI_DECLARATION.md
 
 ## API contract (prefix /api)
-- GET  /shelters/nearest?lat=&lon=&district=&limit=  -> shelters with distance_m, occupancy_pct
-- GET  /route?from_lat=&from_lon=&shelter_id=        -> {shelter, path:[[lat,lon]], rerouted, reason}
-- POST /sos {lat, lon, hazard_type: fire|collapse|flood|medical, citizen_id} -> SOS
+Roles via X-Role header: citizen (default), dispatcher, simulator. "operator" below = dispatcher or simulator.
+- GET  /health, GET /shelters                        -> ok; all shelters
+- GET  /shelters/nearest?lat=&lon=&district=&limit=  -> open shelters with distance_m, occupancy_pct, is_full, zone
+- POST /shelters/{id}/occupancy {current}            -> operator; clamps 0..capacity
+- GET  /route?from_lat=&from_lon=&shelter_id=        -> {shelter, path:[[lat,lon]], distance_m, eta_min, rerouted,
+                                                         reason: shelter_full|road_closed|all_shelters_full,
+                                                         original_shelter_id, provider, edge_ids}
+- GET  /roads                                        -> edges with from/to coordinates and is_closed
+- POST /roads/{id}/close, POST /roads/{id}/open      -> operator
+- GET  /routing/status                               -> {external_up, active_provider}
+- POST /routing/external/{up|down}                   -> operator; simulates external routing API outage
+- POST /sos {lat, lon, hazard_type: fire|collapse|flood|medical, citizen_id} -> 201 SOS (one active per citizen)
+- GET  /sos?status=&zone_id=                         -> SOS list, newest first
 - POST /sos/{id}/safe                                -> marks citizen safe
-- POST /roads/{id}/close, POST /roads/{id}/open      -> dispatcher only
-- POST /shelters/{id}/occupancy {current}            -> simulator/dispatcher
 - GET  /dispatch/overview                            -> sos list, shelters, brigades, alerts
 - POST /dispatch/alerts/{id}/confirm                 -> dispatch brigade + open new shelter
 - WS   /ws/dispatch                                  -> live events

@@ -90,7 +90,29 @@ class OccupancyUpdate(BaseModel):
 
 
 class RouteOut(BaseModel):
-    shelter: ShelterOut
-    path: list[list[float]]
+    shelter: NearestShelterOut
+    path: list[list[float]]  # [[lat, lon], ...]
+    distance_m: int
+    eta_min: int
     rerouted: bool = False
-    reason: str | None = None
+    reason: str | None = None  # shelter_full | road_closed | all_shelters_full
+    original_shelter_id: int | None = None
+    provider: str  # external | local-graph | straight-line
+    edge_ids: list[int] = []
+
+
+class RoadOut(BaseModel):
+    id: int
+    from_node: int
+    to_node: int
+    from_lat: float
+    from_lon: float
+    to_lat: float
+    to_lon: float
+    length_m: float
+    is_closed: bool
+
+
+class RoutingStatusOut(BaseModel):
+    external_up: bool
+    active_provider: str

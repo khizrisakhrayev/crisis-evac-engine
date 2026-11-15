@@ -11,3 +11,10 @@ ALERT_OCCUPANCY_PCT = 95
 SOS_CLUSTER_COUNT = 4
 SOS_CLUSTER_RADIUS_M = 500
 SOS_CLUSTER_WINDOW_MIN = 5
+
+# Routing. EXTERNAL_ROUTING_UP is toggled at runtime (POST /api/routing/external/{up|down});
+# always read it as config.EXTERNAL_ROUTING_UP, never `from config import ...`.
+EXTERNAL_ROUTING_UP = True
+EXTERNAL_ROUTING_TIMEOUT_S = 2.0
+EXTERNAL_ROUTING_LATENCY_S = 0.0  # simulated; > timeout means the external API is treated as unavailable
+WALKING_SPEED_KMH = 5

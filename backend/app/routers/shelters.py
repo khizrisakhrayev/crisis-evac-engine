@@ -44,7 +44,7 @@ def nearest_shelters(
 
 
 @router.post("/shelters/{shelter_id}/occupancy", response_model=ShelterOut,
-             dependencies=[Depends(require_role("dispatcher"))])
+             dependencies=[Depends(require_role("dispatcher", "simulator"))])
 def update_occupancy(shelter_id: int, body: OccupancyUpdate, db: Session = Depends(get_db)):
     shelter = svc.set_occupancy(db, shelter_id, body.current)
     if shelter is None:
