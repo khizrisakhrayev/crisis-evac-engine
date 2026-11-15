@@ -10,7 +10,7 @@ from backend.app.models import DistanceMatrix, RouteCache, Shelter, Zone
 from backend.app.services import routing_provider as rp
 from backend.app.services.circuit_breaker import CircuitBreaker
 
-OP = {"X-Role": "dispatcher"}
+from tests.helpers import STAFF as OP
 PRIO = {"X-Role": "priority_citizen"}
 ORIGIN = {"from_lat": 40.3777, "from_lon": 49.8920}
 
@@ -217,8 +217,8 @@ def test_status_shape_and_roles(client):
     assert set(s) == {"mode", "external_mode", "external_up", "breaker", "active_provider", "cache_size"}
     assert set(s["breaker"]) >= {"state", "consecutive_failures", "seconds_until_retry", "last_error"}
     for mode in ("up", "down", "slow"):
-        assert client.post(f"/api/routing/external/{mode}").status_code == 403
-    assert client.post("/api/routing/external/slow", headers={"X-Role": "simulator"}).json()["external_mode"] == "slow"
+        assert client.post(f"/api/routing/external/{mode}").status_code == 401
+    assert client.post("/api/routing/external/slow", headers=OP).json()["external_mode"] == "slow"
     ov = client.get("/api/dispatch/overview", headers=OP).json()
     assert ov["routing"]["external_mode"] == "slow"
 

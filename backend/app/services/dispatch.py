@@ -1,15 +1,19 @@
 """Dispatcher actions: one-click Red Alert confirmation, brigade release, alert list, overview."""
+import threading
+import time
 from datetime import datetime
 
-from sqlalchemy import case, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..models import Alert, Brigade, Shelter
+from ..models import SOS, Alert, Brigade, Shelter
+from ..schemas import OverviewOut
 from . import geo
 from . import sos as sos_svc
 from .clock import utcnow
 from .routing_provider import routing_status
+from .spam import spam_filter
 
 
 class AlertNotFound(Exception):
@@ -100,17 +104,53 @@ def list_alerts(db: Session, status: str | None = None, confirmed_limit: int | N
 
 
 def overview(db: Session) -> dict:
-    active = sos_svc.list_sos(db, status="active")  # priority first, newest first
-    zones = [dict(id=z.id, name=z.name,
-                  active_sos=sum(1 for s in active if s.zone_id == z.id),
-                  priority_sos=sum(1 for s in active if s.zone_id == z.id
-                                   and s.priority == config.SOS_PRIORITY_CRITICAL))
-             for z in geo.zones()]
+    """Dispatcher snapshot. Suspected spam is excluded everywhere; the SOS list is capped, totals are exact."""
+    not_spam = (SOS.status == "active", SOS.suspected_spam.is_(False))
+    critical = case((SOS.priority == config.SOS_PRIORITY_CRITICAL, 1), else_=0)
+    counts = {zid: (n, p) for zid, n, p in db.execute(
+        select(SOS.zone_id, func.count(), func.sum(critical)).where(*not_spam).group_by(SOS.zone_id))}
+    zones = [dict(id=z.id, name=z.name, active_sos=counts.get(z.id, (0, 0))[0],
+                  priority_sos=int(counts.get(z.id, (0, 0))[1] or 0)) for z in geo.zones()]
     return dict(
-        sos=active,
+        sos=sos_svc.list_sos(db, status="active", limit=config.OVERVIEW_SOS_LIMIT),  # priority first, newest first
+        sos_total=sum(n for n, _ in counts.values()),
+        sos_priority_total=sum(int(p or 0) for _, p in counts.values()),
+        spam_blocked=spam_filter.snapshot(),
         shelters=list(db.scalars(select(Shelter).order_by(Shelter.id))),
         brigades=list(db.scalars(select(Brigade).order_by(Brigade.id))),
         alerts=list_alerts(db, confirmed_limit=config.OVERVIEW_RECENT_CONFIRMED),
         zones=zones,
         routing=routing_status(db),
     )
+
+
+class _OverviewCache:
+    """Serialized overview JSON reused for OVERVIEW_CACHE_TTL_S (many dispatchers polling during a flood)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._at = 0.0
+        self._body: bytes | None = None
+
+    def fresh(self) -> bytes | None:
+        with self._lock:
+            if self._body is not None and time.monotonic() - self._at < config.OVERVIEW_CACHE_TTL_S:
+                return self._body
+        return None
+
+    def get(self, db: Session) -> bytes:
+        cached = self.fresh()
+        if cached is not None:
+            return cached
+        now = time.monotonic()
+        body = OverviewOut.model_validate(overview(db)).model_dump_json().encode()
+        with self._lock:
+            self._body, self._at = body, now
+        return body
+
+    def invalidate(self) -> None:
+        with self._lock:
+            self._body = None
+
+
+overview_cache = _OverviewCache()

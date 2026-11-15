@@ -13,7 +13,8 @@ def _active_for(db: Session, citizen_id: str) -> SOS | None:
     return db.scalar(select(SOS).where(SOS.citizen_id == citizen_id, SOS.status == "active"))
 
 
-def submit_sos(db: Session, data: SOSCreate, priority_citizen: bool = False) -> SOS:
+def submit_sos(db: Session, data: SOSCreate, priority_citizen: bool = False, suspected_spam: bool = False,
+               source_ip: str | None = None) -> SOS:
     """Create an SOS, or refresh the citizen's existing active one (one active SOS per citizen).
 
     Priority comes from the caller's role only (never the body): priority citizens get CRITICAL.
@@ -27,7 +28,8 @@ def submit_sos(db: Session, data: SOSCreate, priority_citizen: bool = False) -> 
         sos = _active_for(db, data.citizen_id)
         if sos is None:
             sos = SOS(citizen_id=data.citizen_id, status="active", priority=priority,
-                      is_priority_citizen=priority_citizen, **fields)
+                      is_priority_citizen=priority_citizen, suspected_spam=suspected_spam,
+                      source_ip=source_ip, **fields)
             db.add(sos)
         else:
             for k, v in fields.items():
@@ -52,9 +54,13 @@ def mark_safe(db: Session, sos_id: int) -> SOS | None:
 
 
 def list_sos(db: Session, status: str | None = None, zone_id: int | None = None,
-             priority: int | None = None) -> list[SOS]:
-    """Most urgent first (priority asc), then newest first."""
+             priority: int | None = None, include_spam: bool = False, limit: int | None = None) -> list[SOS]:
+    """Most urgent first (priority asc), then newest first. Suspected spam excluded unless asked for."""
     q = select(SOS).order_by(SOS.priority.asc(), SOS.created_at.desc(), SOS.id.desc())
+    if not include_spam:
+        q = q.where(SOS.suspected_spam.is_(False))
+    if limit is not None:
+        q = q.limit(limit)
     if status:
         q = q.where(SOS.status == status)
     if zone_id is not None:

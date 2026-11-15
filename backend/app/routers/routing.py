@@ -10,10 +10,10 @@ from ..schemas import RoadOut, RouteOut, RoutingStatusOut
 from ..services import evacuation, roads
 from ..services.routing_provider import breaker, routing_status
 from ..services.ws import publish
-from .auth import PRIORITY_ROLES, current_role, require_role
+from .auth import PRIORITY_ROLES, current_role, require_staff
 
 router = APIRouter(tags=["routing"])
-OPERATOR = Depends(require_role("dispatcher", "simulator"))
+OPERATOR = Depends(require_staff)
 
 
 @router.get("/route", response_model=RouteOut)

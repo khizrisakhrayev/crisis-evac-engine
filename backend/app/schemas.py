@@ -84,6 +84,7 @@ class SOSOut(ORM):
     zone_id: int | None
     priority: int
     is_priority_citizen: bool
+    suspected_spam: bool = False
     created_at: UTCDateTime
 
     @computed_field
@@ -180,8 +181,17 @@ class ZoneStatsOut(BaseModel):
     priority_sos: int
 
 
+class SpamBlockedOut(BaseModel):
+    rate_limited: int
+    duplicates: int
+    suspected: int
+
+
 class OverviewOut(BaseModel):
-    sos: list[SOSOut]
+    sos: list[SOSOut]  # active, priority first, capped at config.OVERVIEW_SOS_LIMIT
+    sos_total: int
+    sos_priority_total: int
+    spam_blocked: SpamBlockedOut
     shelters: list[ShelterOut]
     brigades: list[BrigadeOut]
     alerts: list[AlertOut]

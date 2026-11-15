@@ -4,7 +4,7 @@ from backend.app import config
 from backend.app.db import SessionLocal
 from backend.app.models import Shelter, Zone
 
-DISPATCHER = {"X-Role": "dispatcher"}
+from tests.helpers import STAFF as DISPATCHER
 
 
 def test_nearest_by_point_sorted_with_occupancy(client):
@@ -62,9 +62,9 @@ def test_closed_shelters_excluded(client):
 
 
 def test_occupancy_requires_dispatcher(client):
-    assert client.post("/api/shelters/1/occupancy", json={"current": 10}).status_code == 403
+    assert client.post("/api/shelters/1/occupancy", json={"current": 10}).status_code == 401
     assert client.post("/api/shelters/1/occupancy", json={"current": 10},
-                       headers={"X-Role": "citizen"}).status_code == 403
+                       headers={"X-Role": "dispatcher"}).status_code == 401
 
 
 def test_occupancy_clamps_and_is_full(client):

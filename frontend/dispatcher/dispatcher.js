@@ -82,6 +82,7 @@
   }
   function showError(err) {
     const code = (err && err.code) || "generic";
+    if (err && err.status === 401) { logout(); return; }
     if (!(err && err.code)) console.warn(err);
     showToast(hasKey(`error.${code}`) ? `error.${code}` : "error.generic", null, true);
   }
@@ -106,6 +107,7 @@
       if (!state.ws) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; connectWs(); } // server is back
     } catch (err) {
       if (seq !== state.seq) return;
+      if (err.status === 401) { logout(); return; }
       state.pollOk = false;
       renderConn();
       if (err.code !== "network") showError(err);
@@ -120,7 +122,7 @@
   }
 
   function connectWs() {
-    if (state.ws) return;
+    if (state.ws || !authToken.get()) return;
     let ws;
     try { ws = apiSocket("/ws/dispatch"); } catch (e) { scheduleReconnect(); return; }
     state.ws = ws;
@@ -138,6 +140,7 @@
       state.ws = null;
       state.wsOpen = false;
       renderConn();
+      if (!authToken.get()) return; // logged out
       startPolling();
       scheduleReconnect();
     };
@@ -147,7 +150,51 @@
     const delay = Math.min(WS_MAX_BACKOFF_MS, 1000 * 2 ** state.wsAttempts++);
     state.reconnectTimer = setTimeout(() => { state.reconnectTimer = null; connectWs(); }, delay);
   }
-  function startPolling() { if (!state.pollTimer) state.pollTimer = setInterval(load, POLL_MS); }
+  function startPolling() { if (!state.pollTimer && authToken.get()) state.pollTimer = setInterval(load, POLL_MS); }
+
+  // --- login / logout (JWT in sessionStorage) -----------------------------------------------
+  function showLogin(errorKey) {
+    $("#login").hidden = false;
+    $("#logout").hidden = true;
+    const e = $("#login-error");
+    e.hidden = !errorKey;
+    e.textContent = errorKey ? t(errorKey) : "";
+    $("#login-user").focus();
+  }
+  function logout(expired = true) {
+    authToken.clear();
+    stopPolling();
+    clearTimeout(state.reconnectTimer); state.reconnectTimer = null;
+    clearTimeout(state.refreshTimer); state.refreshTimer = null;
+    const ws = state.ws;
+    state.ws = null; state.wsOpen = false;
+    if (ws) try { ws.close(); } catch (e) { /* already closed */ }
+    state.seq++;
+    showLogin(expired ? "error.auth_required" : null);
+  }
+  async function start() {
+    $("#login").hidden = true;
+    $("#logout").hidden = false;
+    try { state.zones = await dapi("/zones"); } catch (err) { showError(err); }
+    await load();
+    if (state.ov) { renderSimOptions(); syncSlider(); }
+    connectWs();
+  }
+  function wireLogin() {
+    $("#login-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      try {
+        const res = await api("/auth/login", { method: "POST",
+          body: { username: $("#login-user").value.trim(), password: $("#login-pass").value } });
+        authToken.set(res.access_token);
+        $("#login-pass").value = "";
+        start();
+      } catch (err) {
+        showLogin(hasKey(`error.${err.code}`) ? `error.${err.code}` : "error.generic");
+      }
+    });
+    $("#logout").addEventListener("click", () => logout(false));
+  }
   function stopPolling() { clearInterval(state.pollTimer); state.pollTimer = null; }
 
   // --- header chips ---------------------------------------------------------------------
@@ -236,13 +283,16 @@
   }
   function renderKpis() {
     const ov = state.ov;
-    const prio = ov.sos.filter((s) => s.priority === 1).length;
     const openAlerts = ov.alerts.filter((a) => a.status === "open").length;
     const available = ov.brigades.filter((b) => b.status === "available").length;
     const open = ov.shelters.filter((s) => s.is_open);
     const avg = open.length ? open.reduce((sum, s) => sum + s.occupancy_pct, 0) / open.length : 0;
-    setKpi("#kpi-active", String(ov.sos.length), ov.sos.length > 0);
-    setKpi("#kpi-priority", String(prio), prio > 0);
+    setKpi("#kpi-active", String(ov.sos_total), ov.sos_total > 0);
+    setKpi("#kpi-priority", String(ov.sos_priority_total), ov.sos_priority_total > 0);
+    const sb = ov.spam_blocked;
+    const blocked = sb.rate_limited + sb.duplicates + sb.suspected;
+    setKpi("#kpi-flood", String(blocked), blocked > 0);
+    $("#kpi-flood .sub").textContent = t("kpi.flood_detail", { a: sb.rate_limited, b: sb.duplicates, c: sb.suspected });
     setKpi("#kpi-alerts", String(openAlerts), openAlerts > 0);
     setKpi("#kpi-brigades", t("kpi.ratio", { a: available, b: ov.brigades.length }), available === 0);
     setKpi("#kpi-occupancy", t("kpi.pct", { n: Math.round(avg) }), avg >= OCC_RED);
@@ -546,11 +596,9 @@
   document.addEventListener("DOMContentLoaded", async () => {
     initMap();
     wireSimulator();
+    wireLogin();
     renderConn();
-    try { state.zones = await dapi("/zones"); } catch (err) { showError(err); }
-    await load();
-    if (state.ov) { renderSimOptions(); syncSlider(); }
-    connectWs();
+    if (authToken.get()) start(); else showLogin(null);
     setInterval(() => { if (state.ov) { renderSosFeed(); renderAlerts(); } }, 15000); // time-ago + expire confirm cards
     setInterval(() => { if (state.ov && state.ov.routing.breaker.state === "open") renderRouting(); }, 1000); // countdown
   });

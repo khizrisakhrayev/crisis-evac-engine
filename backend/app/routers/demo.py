@@ -6,9 +6,9 @@ from ..db import get_db
 from ..schemas import AlertOut, BurstOut, SOSBurst, SOSOut
 from ..services import demo as svc
 from ..services.ws import publish, publish_alert
-from .auth import require_role
+from .auth import require_staff
 
-router = APIRouter(tags=["demo"], dependencies=[Depends(require_role("dispatcher", "simulator"))])
+router = APIRouter(tags=["demo"], dependencies=[Depends(require_staff)])
 
 
 @router.post("/demo/sos-burst", response_model=BurstOut)

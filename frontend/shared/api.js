@@ -1,4 +1,5 @@
 // Shared API helpers. X-Role: explicit {role} option > page override (api.role) > localStorage "role" > "citizen".
+// Staff pages log in (POST /auth/login); the JWT lives in sessionStorage and is sent as a Bearer token.
 
 const storage = {
   get(key, fallback = null) {
@@ -18,6 +19,12 @@ class ApiError extends Error {
   }
 }
 
+const authToken = {
+  get() { try { return sessionStorage.getItem("token"); } catch (e) { return null; } },
+  set(v) { try { sessionStorage.setItem("token", v); } catch (e) { /* storage unavailable */ } },
+  clear() { try { sessionStorage.removeItem("token"); } catch (e) { /* storage unavailable */ } },
+};
+
 function getRole() {
   return api.role || storage.get("role", "citizen");
 }
@@ -27,7 +34,8 @@ async function api(path, { method = "GET", body, role } = {}) {
   try {
     res = await fetch("/api" + path, {
       method,
-      headers: { "Content-Type": "application/json", "X-Role": role || getRole() },
+      headers: Object.assign({ "Content-Type": "application/json", "X-Role": role || getRole() },
+        authToken.get() ? { Authorization: `Bearer ${authToken.get()}` } : {}),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (e) {
@@ -44,5 +52,6 @@ api.role = null; // pages may set a fixed role (e.g. dispatcher page)
 
 function apiSocket(path) {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  return new WebSocket(`${proto}://${location.host}/api${path}`);
+  const token = authToken.get();
+  return new WebSocket(`${proto}://${location.host}/api${path}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
 }

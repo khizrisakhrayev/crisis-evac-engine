@@ -11,7 +11,7 @@ from ..services import crisis
 from ..services import shelters as svc
 from ..services.routing_provider import routing_mode
 from ..services.ws import publish, publish_alert
-from .auth import PRIORITY_ROLES, current_role, require_role
+from .auth import PRIORITY_ROLES, current_role, require_staff
 
 router = APIRouter(tags=["shelters"])
 
@@ -56,7 +56,7 @@ def nearest_shelters(
 
 
 @router.post("/shelters/{shelter_id}/occupancy", response_model=ShelterOut,
-             dependencies=[Depends(require_role("dispatcher", "simulator"))])
+             dependencies=[Depends(require_staff)])
 def update_occupancy(shelter_id: int, body: OccupancyUpdate, db: Session = Depends(get_db)):
     result = svc.set_occupancy(db, shelter_id, body.current)
     if result is None:

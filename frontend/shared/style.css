@@ -227,3 +227,11 @@ main.placeholder { padding: 16px; }
   font-weight: 800; font-size: 1.05rem; text-align: center; border-bottom: 3px solid #b45309;
 }
 .notice-offline::before { content: "⚠ "; }
+
+/* Drop 3: dispatcher login + flood KPI */
+.login-screen { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(5, 12, 24, .92); }
+.login-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; width: min(360px, 92vw); display: grid; gap: 12px; }
+.login-card label { display: grid; gap: 4px; font-weight: 600; }
+.login-card input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: inherit; }
+.login-error { color: #ff5252; margin: 0; }
+.kpi .sub { color: var(--muted); }

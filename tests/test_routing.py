@@ -4,7 +4,7 @@ from backend.app import config
 from backend.app.services import routing_provider as rp
 from backend.app.services.geo import haversine_m
 
-OP = {"X-Role": "dispatcher"}
+from tests.helpers import STAFF as OP
 ORIGIN = {"from_lat": 40.3777, "from_lon": 49.8920}  # Khatai
 KHATAI_SHELTER = 10  # Khatai District Shelter, capacity 500
 STADIUM = 7  # Tofiq Bahramov Republican Stadium (Narimanov)
@@ -105,16 +105,16 @@ def test_roads_list(client):
 
 
 def test_role_and_404_checks(client):
-    assert client.post("/api/roads/1/close").status_code == 403
-    assert client.post("/api/roads/1/open").status_code == 403
-    assert client.post("/api/routing/external/down").status_code == 403
-    assert client.post("/api/roads/1/close", headers={"X-Role": "citizen"}).status_code == 403
+    assert client.post("/api/roads/1/close").status_code == 401
+    assert client.post("/api/roads/1/open").status_code == 401
+    assert client.post("/api/routing/external/down").status_code == 401
+    assert client.post("/api/roads/1/close", headers={"X-Role": "citizen"}).status_code == 401
     assert client.post("/api/roads/9999/close", headers=OP).status_code == 404
     assert client.post("/api/routing/external/sideways", headers=OP).status_code == 422
     assert client.get("/api/route", params={**ORIGIN, "shelter_id": 9999}).status_code == 404
     assert client.get("/api/route", params={"from_lat": 40.38}).status_code == 422
-    # simulator role is accepted too
-    assert client.post("/api/roads/1/close", headers={"X-Role": "simulator"}).status_code == 200
+    # X-Role can no longer grant staff rights (Drop 3: JWT only)
+    assert client.post("/api/roads/1/close", headers={"X-Role": "simulator"}).status_code == 401
 
 
 def test_graph_route_unit():

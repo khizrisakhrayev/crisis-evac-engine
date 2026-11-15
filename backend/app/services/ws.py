@@ -1,11 +1,20 @@
-"""Live events for dispatchers over WS /api/ws/dispatch. Message shape: {"type": <code>, "data": {...}}."""
+"""Live events for dispatchers over WS /api/ws/dispatch. Message shape: {"type": <code>, "data": {...}}.
+
+publish() never blocks a request: it appends to a thread-safe queue. A background task (started in the
+app lifespan) drains it at most WS_MAX_MESSAGES_PER_S times per second; when several events are waiting
+they are coalesced into one {"type": "batch", "data": [event, ...]} message.
+"""
+import asyncio
+import collections
 import logging
 
-import anyio
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
 
+from .. import config
+
 log = logging.getLogger(__name__)
+MAX_QUEUE = 2000  # oldest events dropped beyond this (UI refetches the overview anyway)
 
 
 class ConnectionManager:
@@ -28,16 +37,42 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+_queue: collections.deque = collections.deque(maxlen=MAX_QUEUE)
+
+
+def _invalidate_overview(event_type: str) -> None:
+    if event_type != "sos_created":  # SOS floods rely on the 1 s TTL; everything else shows at once
+        from .dispatch import overview_cache
+
+        overview_cache.invalidate()
 
 
 def publish(event_type: str, data=None) -> None:
-    """Broadcast from sync code (FastAPI runs sync routes in worker threads). Never raises."""
-    if not manager.active:
-        return
+    """Queue an event from sync or async code. Never raises, never blocks."""
     try:
-        anyio.from_thread.run(manager.broadcast, {"type": event_type, "data": jsonable_encoder(data)})
-    except Exception:  # no event loop (e.g. called outside a request) or a send failure
+        _invalidate_overview(event_type)
+        if manager.active:
+            _queue.append({"type": event_type, "data": jsonable_encoder(data)})
+    except Exception:
         log.warning("publish %s failed", event_type, exc_info=True)
+
+
+async def flush() -> None:
+    if not _queue:
+        return
+    events = []
+    while _queue:
+        events.append(_queue.popleft())
+    await manager.broadcast(events[0] if len(events) == 1 else {"type": "batch", "data": events})
+
+
+async def drain_forever() -> None:
+    while True:
+        try:
+            await flush()
+        except Exception:
+            log.warning("ws flush failed", exc_info=True)
+        await asyncio.sleep(1 / config.WS_MAX_MESSAGES_PER_S)
 
 
 def publish_alert(event) -> None:

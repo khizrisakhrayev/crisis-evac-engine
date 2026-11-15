@@ -35,3 +35,26 @@ BREAKER_COOLDOWN_S = 30           # open -> half_open after this many seconds
 STATIC_MATRIX_DETOUR_FACTOR = 1.3 # haversine x factor when no road distance is known
 MAX_EDGE_DETOUR_RATIO = 2.5      # seed drops a road whose real walking length exceeds this x straight distance
 WALKING_SPEED_KMH = 5
+
+# --- Challenge Drop 3: SOS flood protection, JWT / RBAC, latency ------------------------------------------
+RATE_WINDOW_S = 60                    # sliding window for all rate limits below
+SOS_RATE_PER_IP = 20                  # POST /api/sos per client IP per window
+SOS_RATE_PER_CITIZEN = 3              # POST /api/sos per citizen_id per window
+LOGIN_RATE_PER_IP = 5                 # POST /api/auth/login per client IP per window
+SOS_DUPLICATE_WINDOW_S = 10           # identical payload from the same IP -> the existing SOS is returned
+IDEMPOTENCY_TTL_S = 600               # Idempotency-Key -> SOS id remembered this long
+SPAM_DISTINCT_CITIZENS_PER_IP = 5     # > this many citizen_ids from one IP in SPAM_WINDOW_S -> suspected_spam
+SPAM_WINDOW_S = 60
+OVERVIEW_SOS_LIMIT = 100              # dispatcher overview caps the SOS list (totals are still exact)
+OVERVIEW_CACHE_TTL_S = 1.0            # dispatcher overview payload cache
+WS_MAX_MESSAGES_PER_S = 5             # WebSocket events are queued and coalesced to at most this rate
+
+JWT_SECRET = os.getenv("JWT_SECRET") or os.urandom(32).hex()  # random per start if unset
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRES_S = 8 * 3600
+PBKDF2_ITERATIONS = 200_000
+# Seeded staff accounts (username -> role). Demo passwords documented in README; override via env.
+STAFF_USERS = {
+    "dispatcher": ("dispatcher", os.getenv("DISPATCHER_PASSWORD", "dispatcher123")),
+    "admin": ("admin", os.getenv("ADMIN_PASSWORD", "admin123")),
+}

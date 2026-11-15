@@ -7,7 +7,7 @@ from backend.app.seed import SEED_REPORT
 from backend.app.services.geo import haversine_m
 
 ORIGIN = {"from_lat": 40.3777, "from_lon": 49.8920}  # Khatai, off any road node
-OP = {"X-Role": "dispatcher"}
+from tests.helpers import STAFF as OP
 
 
 def route(client, **params):

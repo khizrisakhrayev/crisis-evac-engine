@@ -11,7 +11,9 @@ from ..schemas import SOSBurst, SOSCreate
 from ..seed import SHELTERS
 from . import crisis
 from . import sos as sos_svc
+from .rate_limit import limiter
 from .routing_provider import breaker, invalidate_graph
+from .spam import spam_filter
 
 M_PER_DEG_LAT = 111_320
 
@@ -58,3 +60,8 @@ def reset(db: Session) -> None:
     invalidate_graph(db)
     config.EXTERNAL_MODE = "up"
     breaker.reset()
+    limiter.reset()
+    spam_filter.reset()
+    from .dispatch import overview_cache  # local import: dispatch imports this module's siblings
+
+    overview_cache.invalidate()

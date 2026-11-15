@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,7 +12,9 @@ from . import models  # noqa: F401  (register tables)
 from .db import Base, SessionLocal, engine
 from .routers import auth, demo, dispatch, routing, shelters, sos
 from .seed import seed_if_empty
-from .services import geo
+from .services import geo, ws
+from .services.auth import seed_users
+from .services.flood_gate import SOSFloodGate
 from .services.routing_provider import build_distance_matrix
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
@@ -24,10 +27,14 @@ async def lifespan(app: FastAPI):
         seed_if_empty(db)
         geo.load_zones(db)
         build_distance_matrix(db)  # static backup distances (no-op if already built)
+        seed_users(db)             # staff accounts (passwords from env)
+    drain = asyncio.create_task(ws.drain_forever())  # WebSocket events: queued, coalesced, never block requests
     yield
+    drain.cancel()
 
 
 app = FastAPI(title="Urban Crisis & Crowd Evacuation Engine", lifespan=lifespan)
+app.add_middleware(SOSFloodGate)  # Drop 3: 429 for flooding IPs before routing / parsing / thread pool
 
 
 @app.exception_handler(RequestValidationError)

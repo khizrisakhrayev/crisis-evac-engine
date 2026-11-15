@@ -44,9 +44,13 @@ def test_frontend_pages(client):
     assert client.get("/shared/i18n.js").status_code == 200
 
 
+from tests.helpers import STAFF  # noqa: E402
+
+
 def test_confirm_requires_dispatcher_role(client):
-    assert client.post("/api/dispatch/alerts/1/confirm").status_code == 403
-    r = client.post("/api/dispatch/alerts/999/confirm", headers={"X-Role": "dispatcher"})
+    assert client.post("/api/dispatch/alerts/1/confirm").status_code == 401
+    assert client.post("/api/dispatch/alerts/1/confirm", headers={"X-Role": "dispatcher"}).status_code == 401
+    r = client.post("/api/dispatch/alerts/999/confirm", headers=STAFF)
     assert r.status_code == 404 and r.json()["detail"]["code"] == "alert_not_found"
 
 

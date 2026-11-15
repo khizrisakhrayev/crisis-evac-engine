@@ -10,8 +10,8 @@ from backend.app.models import SOS, Brigade, Shelter
 from backend.app.services import crisis, geo
 from backend.app.services.clock import utcnow
 
-OP = {"X-Role": "dispatcher"}
-SIM = {"X-Role": "simulator"}
+from tests.helpers import STAFF as OP
+SIM = OP  # the simulator role was folded into dispatcher/admin JWTs (Drop 3)
 KHATAI = (40.3777, 49.8920)
 KHATAI_SHELTER = 10  # capacity 500
 
@@ -209,17 +209,18 @@ def test_confirm_without_reserves_creates_temporary_shelter(client):
 # --- overview / roles / demo ---------------------------------------------------------
 
 def test_overview_requires_dispatcher(client):
-    assert client.get("/api/dispatch/overview").status_code == 403
-    assert client.get("/api/dispatch/overview", headers=SIM).status_code == 403
-    assert client.get("/api/dispatch/overview", headers={"X-Role": "citizen"}).status_code == 403
-    assert client.get("/api/dispatch/alerts").status_code == 403
+    assert client.get("/api/dispatch/overview").status_code == 401
+    assert client.get("/api/dispatch/overview", headers={"X-Role": "dispatcher"}).status_code == 401
+    assert client.get("/api/dispatch/overview", headers={"X-Role": "citizen"}).status_code == 401
+    assert client.get("/api/dispatch/alerts").status_code == 401
 
 
 def test_overview_content(client):
     post_sos(client, "ov-prio", 0, headers={"X-Role": "priority_citizen"})
     burst(client)
     ov = client.get("/api/dispatch/overview", headers=OP).json()
-    assert set(ov) == {"sos", "shelters", "brigades", "alerts", "zones", "routing"}
+    assert set(ov) == {"sos", "sos_total", "sos_priority_total", "spam_blocked", "shelters", "brigades", "alerts",
+                       "zones", "routing"}
     assert ov["sos"][0]["priority"] == 1 and len(ov["sos"]) == 5
     assert len(ov["shelters"]) == 14 and all("occupancy_pct" in s and "is_open" in s for s in ov["shelters"])
     assert len(ov["brigades"]) == 6 and ov["alerts"][0]["status"] == "open"
@@ -230,8 +231,8 @@ def test_overview_content(client):
 
 
 def test_demo_requires_role_and_reset_clears(client):
-    assert client.post("/api/demo/sos-burst", json={"lat": 40.38, "lon": 49.9}).status_code == 403
-    assert client.post("/api/demo/reset").status_code == 403
+    assert client.post("/api/demo/sos-burst", json={"lat": 40.38, "lon": 49.9}).status_code == 401
+    assert client.post("/api/demo/reset").status_code == 401
     confirm(client, burst(client)["alerts"][0]["id"])
     assert client.post("/api/demo/reset", headers=SIM).json() == {"status": "ok"}
     ov = client.get("/api/dispatch/overview", headers=OP).json()
@@ -243,15 +244,17 @@ def test_demo_requires_role_and_reset_clears(client):
 # --- live events -----------------------------------------------------------------------
 
 def test_websocket_receives_alert_created(client):
-    with client.websocket_connect("/api/ws/dispatch") as ws:
+    token = OP["Authorization"].split()[1]
+    with client.websocket_connect(f"/api/ws/dispatch?token={token}") as ws:
         assert ws.receive_json()["type"] == "hello"
         burst(client)
         client.post("/api/routing/external/up", headers=OP)  # sentinel: last event we expect
         types = []
         for _ in range(50):
             msg = ws.receive_json()
-            types.append(msg["type"])
-            if msg["type"] == "routing_status":
+            batch = msg["data"] if msg["type"] == "batch" else [msg]  # coalesced events
+            types += [m["type"] for m in batch]
+            if "routing_status" in types:
                 break
     assert types.count("sos_created") == 4 and "alert_created" in types
     assert types[-1] == "routing_status"

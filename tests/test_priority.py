@@ -6,7 +6,7 @@ from backend.app.models import RoadEdge, Shelter, Zone
 from backend.app.services import routing_provider as rp
 
 PRIO = {"X-Role": "priority_citizen"}
-OP = {"X-Role": "dispatcher"}
+from tests.helpers import STAFF as OP
 ORIGIN = {"from_lat": 40.3777, "from_lon": 49.8920}  # Khatai
 KHATAI_SHELTER = 10  # not accessible (basement)
 STADIUM = 7
@@ -184,7 +184,7 @@ def test_shelter_items_include_is_accessible(client):
 def test_errors_are_coded(client):
     for r, code in [
         (client.post("/api/sos/999999/safe"), "sos_not_found"),
-        (client.post("/api/roads/1/close"), "forbidden_role"),
+        (client.post("/api/roads/1/close"), "auth_required"),
         (client.get("/api/shelters/nearest"), "point_or_district_required"),
         (client.get("/api/route", params={**ORIGIN, "shelter_id": 9999}), "shelter_not_found"),
         (client.post("/api/sos", json={"lat": 1, "lon": 1, "hazard_type": "x", "citizen_id": "e"}), "validation_error"),

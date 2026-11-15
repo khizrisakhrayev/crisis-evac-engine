@@ -64,6 +64,8 @@ class SOS(Base):
     # At most one active SOS per citizen (repeat SOS updates it; see services/sos.py).
     __table_args__ = (
         Index("uq_sos_active_citizen", "citizen_id", unique=True, sqlite_where=text("status = 'active'")),
+        Index("ix_sos_status_created", "status", "created_at"),
+        Index("ix_sos_zone_created", "zone_id", "created_at"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     citizen_id: Mapped[str] = mapped_column(String(64), index=True)
@@ -74,7 +76,19 @@ class SOS(Base):
     zone_id: Mapped[int | None] = mapped_column(ForeignKey("zones.id"), nullable=True)
     priority: Mapped[int] = mapped_column(Integer, default=config.SOS_PRIORITY_NORMAL)  # 1 = critical, 2 = normal
     is_priority_citizen: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Flood protection: too many citizen ids from one IP. Excluded from Red Alerts, the feed, KPIs and the map.
+    suspected_spam: Mapped[bool] = mapped_column(Boolean, default=False)
+    source_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class User(Base):
+    """Staff account (dispatcher / admin). Password stored as a PBKDF2 hash."""
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    role: Mapped[str] = mapped_column(String(32))
+    password_hash: Mapped[str] = mapped_column(String(256))
 
 
 class Brigade(Base):

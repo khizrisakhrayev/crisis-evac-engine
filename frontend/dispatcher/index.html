@@ -19,8 +19,22 @@
         <button type="button" data-lang="en" data-i18n="lang.en"></button>
       </div>
       <a href="/" data-i18n="nav.citizen"></a>
+      <button type="button" id="logout" class="btn btn-small" data-i18n="login.logout" hidden></button>
     </nav>
   </header>
+
+  <div id="login" class="login-screen" hidden>
+    <form id="login-form" class="login-card">
+      <h2 data-i18n="login.title"></h2>
+      <p class="hint" data-i18n="login.hint"></p>
+      <label><span data-i18n="login.username"></span>
+        <input id="login-user" name="username" autocomplete="username" required></label>
+      <label><span data-i18n="login.password"></span>
+        <input id="login-pass" name="password" type="password" autocomplete="current-password" required></label>
+      <p id="login-error" class="login-error" role="alert" hidden></p>
+      <button type="submit" class="btn btn-primary" data-i18n="login.submit"></button>
+    </form>
+  </div>
 
   <main class="dash">
     <section id="red-alerts" class="red-alert-area" aria-live="assertive"></section>
@@ -31,6 +45,7 @@
       <div class="kpi" id="kpi-alerts"><div class="value"></div><div class="label" data-i18n="kpi.open_alerts"></div></div>
       <div class="kpi" id="kpi-brigades"><div class="value"></div><div class="label" data-i18n="kpi.brigades"></div></div>
       <div class="kpi" id="kpi-occupancy"><div class="value"></div><div class="label" data-i18n="kpi.avg_occupancy"></div></div>
+      <div class="kpi kpi-flood" id="kpi-flood"><div class="value"></div><div class="label" data-i18n="kpi.flood"></div><div class="sub small"></div></div>
     </section>
 
     <section class="dash-grid">

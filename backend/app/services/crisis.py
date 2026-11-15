@@ -4,9 +4,10 @@ Rules are pure functions (find_sos_cluster, is_overflowing) so they can be unit-
 timestamps; on_sos_created / on_shelter_updated wrap them with DB access and alert de-duplication.
 Times are naive UTC (services.clock.utcnow).
 """
+import math
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ from ..schemas import occupancy_pct
 from .clock import utcnow
 from .geo import haversine_m
 
+M_PER_DEG_LAT = 111_320
 SOS_CLUSTER = "sos_cluster"
 SHELTER_OVERFLOW = "shelter_overflow"
 
@@ -37,7 +39,7 @@ def find_sos_cluster(new, active, now: datetime) -> list | None:
         candidates.append(new)
     latest: dict[str, object] = {}
     for s in candidates:
-        if s.status != "active" or s.created_at < since:
+        if s.status != "active" or s.created_at < since or getattr(s, "suspected_spam", False):
             continue
         same_zone = new.zone_id is not None and s.zone_id == new.zone_id
         if same_zone or haversine_m(new.lat, new.lon, s.lat, s.lon) <= config.SOS_CLUSTER_RADIUS_M:
@@ -72,9 +74,17 @@ def _zone_filter(zone_id):
 
 def on_sos_created(db: Session, sos: SOS, now: datetime | None = None) -> AlertEvent | None:
     """HOOK called after every SOS create/refresh. Creates or grows the zone's open sos_cluster alert."""
+    if sos.suspected_spam:
+        return None
     now = now or utcnow()
     since = now - timedelta(minutes=config.SOS_CLUSTER_WINDOW_MIN)
-    active = db.scalars(select(SOS).where(SOS.status == "active", SOS.created_at >= since)).all()
+    # SQL pre-filter (indexed on status/zone + created_at): window, not spam, same zone OR inside a bounding box.
+    dlat = config.SOS_CLUSTER_RADIUS_M / M_PER_DEG_LAT
+    dlon = dlat / max(0.01, math.cos(math.radians(sos.lat)))
+    near = and_(SOS.lat.between(sos.lat - dlat, sos.lat + dlat), SOS.lon.between(sos.lon - dlon, sos.lon + dlon))
+    where = or_(SOS.zone_id == sos.zone_id, near) if sos.zone_id is not None else near
+    active = db.scalars(select(SOS).where(SOS.status == "active", SOS.created_at >= since,
+                                          SOS.suspected_spam.is_(False), where)).all()
     members = find_sos_cluster(sos, active, now)
     if not members:
         return None

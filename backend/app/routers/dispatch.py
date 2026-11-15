@@ -1,22 +1,31 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, Response, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
-from ..db import get_db
+from ..db import SessionLocal, get_db
 from ..errors import api_error
 from ..schemas import AlertOut, BrigadeOut, ConfirmOut, OverviewOut, ShelterOut
 from ..services import dispatch as svc
 from ..services.ws import manager, publish
-from .auth import require_role
+from ..services.auth import decode_token
+from .auth import STAFF_ROLES, require_staff
 
 router = APIRouter(tags=["dispatch"])
-DISPATCHER = [Depends(require_role("dispatcher"))]
+DISPATCHER = [Depends(require_staff)]
+
+
+def _overview_body() -> bytes:
+    with SessionLocal() as db:
+        return svc.overview_cache.get(db)
 
 
 @router.get("/dispatch/overview", response_model=OverviewOut, dependencies=DISPATCHER)
-def overview(db: Session = Depends(get_db)):
-    return svc.overview(db)
+async def overview():
+    # Cached 1 s: a cache hit is served straight from the event loop, a miss builds it in a worker thread.
+    body = svc.overview_cache.fresh() or await run_in_threadpool(_overview_body)
+    return Response(content=body, media_type="application/json")
 
 
 @router.get("/dispatch/alerts", response_model=list[AlertOut], dependencies=DISPATCHER)
@@ -53,7 +62,11 @@ def release_brigade(brigade_id: int, db: Session = Depends(get_db)):
 
 
 @router.websocket("/ws/dispatch")
-async def ws_dispatch(ws: WebSocket):
+async def ws_dispatch(ws: WebSocket, token: str | None = Query(default=None)):
+    claims = decode_token(token) if token else None
+    if claims is None or claims.get("role") not in STAFF_ROLES:
+        await ws.close(code=4401)  # rejected before accept: no / bad / non-staff token
+        return
     await manager.connect(ws)
     try:
         await ws.send_json({"type": "hello", "data": None})
