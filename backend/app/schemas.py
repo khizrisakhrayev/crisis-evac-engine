@@ -120,6 +120,12 @@ class SOSBurst(BaseModel):
     hazard_type: HazardType = "fire"
 
 
+class SimulateIn(BaseModel):
+    citizens: int = Field(150, ge=1, le=config.SIM_MAX_CITIZENS)
+    zone_id: int | None = None
+    speed: float = Field(20, gt=0, le=config.SIM_MAX_SPEED)
+
+
 class OccupancyUpdate(BaseModel):
     current: int
 

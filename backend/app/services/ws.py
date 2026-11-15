@@ -41,7 +41,7 @@ _queue: collections.deque = collections.deque(maxlen=MAX_QUEUE)
 
 
 def _invalidate_overview(event_type: str) -> None:
-    if event_type != "sos_created":  # SOS floods rely on the 1 s TTL; everything else shows at once
+    if event_type not in ("sos_created", "sim_tick"):  # floods / sim ticks rely on the 1 s TTL
         from .dispatch import overview_cache
 
         overview_cache.invalidate()

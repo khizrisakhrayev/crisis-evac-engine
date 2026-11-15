@@ -13,7 +13,7 @@ backend/app/: main.py config.py db.py models.py schemas.py seed.py errors.py, da
 backend/scripts/snap_roads.py (one-off, manual: python -m backend.scripts.snap_roads [--shelters-only])
 backend/app/routers/: shelters.py sos.py routing.py dispatch.py demo.py auth.py
 backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py circuit_breaker.py roads.py evacuation.py
-                       crisis.py dispatch.py demo.py ws.py rate_limit.py spam.py auth.py flood_gate.py
+                       crisis.py dispatch.py demo.py ws.py rate_limit.py spam.py auth.py flood_gate.py simulation.py
 frontend/citizen/ (index.html citizen.js), frontend/dispatcher/ (index.html dispatcher.js),
 frontend/shared/ (api.js i18n.js map.js style.css), frontend/vendor/leaflet/
 tests/ (tests/helpers.STAFF = JWT headers filled by conftest; tests/load/flood_test.py standalone), docs/, README.md, AI_DECLARATION.md
@@ -69,12 +69,20 @@ Roles: citizen (default) / priority_citizen via X-Role header (no login). Staff 
                                                          zone centre); returns {alert, brigade|null, shelter}; 409 if twice
 - POST /dispatch/brigades/{id}/release               -> dispatcher; brigade back to available
 - POST /demo/sos-burst {lat, lon, count=4, hazard_type} -> operator; distinct citizens within 240 m (fires an alert)
-- POST /demo/reset                                   -> operator; clear SOS/alerts, free brigades, close reserves, reset roads
+- POST /demo/reset                                   -> operator; clear SOS/alerts, free brigades, close reserves, reset roads (also stops the simulation)
+- POST /demo/simulate {citizens=150 (<=500), zone_id?, speed=20 (<=200)} -> operator; live evacuation simulation:
+                                                         virtual citizens (10% priority) walk recommended street routes;
+                                                         per tick (1 s): move, batched occupancy write per shelter via
+                                                         shelters.set_occupancy + crisis.on_shelter_updated, reroute
+                                                         walkers whose shelter is >= 90% / closed; WS "sim_tick"
+                                                         {running, speed, spawned, moving, arrived, rerouted, stuck,
+                                                         positions: [[id, lat, lon, priority 0|1, status 0 moving|1 arrived|2 stuck]]}
+- POST /demo/simulate/stop                           -> operator; {running: false, ...counters}
 - WS   /ws/dispatch?token=<jwt>                       -> staff only (closed 4401 otherwise); {type, data}; queued and
                                                          coalesced to <= 5 msg/s: several events -> {type: "batch",
                                                          data: [{type, data}, ...]}; types: hello, sos_created, sos_updated, shelter_updated,
                                                          road_updated, alert_created, alert_updated, alert_confirmed,
-                                                         brigade_updated, routing_status, demo_reset
+                                                         brigade_updated, routing_status, demo_reset, sim_tick (dispatcher animates it; never triggers an overview refetch)
 
 ## Domain rules
 - Reroute citizen when a road on the path is closed OR the shelter is >= 90% full.

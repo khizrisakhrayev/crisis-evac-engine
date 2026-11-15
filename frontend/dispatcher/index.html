@@ -51,12 +51,18 @@
     <section class="dash-grid">
       <div class="map-wrap">
         <div id="dmap" role="application" data-i18n-aria="map.label"></div>
+        <div id="evac-bar" class="evac-bar" role="status" hidden>
+          <span class="evac-dot" aria-hidden="true"></span>
+          <span id="evac-text"></span>
+          <button type="button" id="evac-stop" class="btn btn-small" data-i18n="evac.stop"></button>
+        </div>
         <ul class="map-legend" data-i18n-aria="legend.title">
           <li><i class="lg-sos"></i><span data-i18n="legend.sos"></span></li>
           <li><i class="lg-sos-prio"></i><span data-i18n="legend.sos_priority"></span></li>
           <li><i class="lg-shelter"></i><span data-i18n="legend.shelter"></span></li>
           <li><i class="lg-closed"></i><span data-i18n="legend.closed"></span></li>
           <li><i class="lg-cluster"></i><span data-i18n="legend.cluster"></span></li>
+          <li><i class="lg-walker"></i><span data-i18n="legend.walker"></span></li>
         </ul>
       </div>
       <div class="dash-side">
@@ -98,6 +104,16 @@
           </div>
           <p id="sim-point" class="small"></p>
           <div class="sim-grid">
+            <fieldset>
+              <legend data-i18n="evac.title"></legend>
+              <div class="row">
+                <label><span data-i18n="evac.citizens"></span>
+                  <input id="evac-count" type="number" min="1" max="500" value="150"></label>
+                <label><span data-i18n="evac.speed"></span>
+                  <input id="evac-speed" type="number" min="1" max="200" value="20"></label>
+              </div>
+              <button type="button" id="evac-run" class="btn btn-primary" data-i18n="evac.run"></button>
+            </fieldset>
             <fieldset>
               <legend data-i18n="sim.burst"></legend>
               <label><span data-i18n="sim.hazard"></span>

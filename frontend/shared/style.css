@@ -366,3 +366,19 @@ select.btn { flex: 1; min-width: 160px; }
   .dash-side { overflow: visible; }
   .theme-dark .app-header { position: sticky; height: auto; flex-wrap: wrap; }
 }
+
+/* live evacuation simulation */
+.evac-bar {
+  position: absolute; top: var(--s3); left: 50%; transform: translateX(-50%); z-index: 850; max-width: calc(100% - 120px);
+  display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s2) var(--s2) var(--s4);
+  background: rgba(11, 18, 32, .94); color: var(--fg); border: 1px solid #38bdf8; border-radius: 999px; font-weight: 700; font-size: .9rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+.evac-bar.done { border-color: var(--ok); padding-right: var(--s4); }
+.evac-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: #38bdf8; animation: evac-blink 1s ease-in-out infinite; }
+.evac-bar.done .evac-dot { background: var(--ok); animation: none; }
+@keyframes evac-blink { 50% { opacity: .3; } }
+.evac-bar .btn { min-height: 32px; background: var(--danger); border-color: var(--danger); color: #fff; border-radius: 999px; }
+.lg-walker { width: 10px; height: 10px; border-radius: 50%; background: #38bdf8; border: 1px solid #0b1220; }
+.sim .row label { flex: 1 1 100px; }
+.sim input[type=number] { width: 100%; }

@@ -58,3 +58,10 @@ STAFF_USERS = {
     "dispatcher": ("dispatcher", os.getenv("DISPATCHER_PASSWORD", "dispatcher123")),
     "admin": ("admin", os.getenv("ADMIN_PASSWORD", "admin123")),
 }
+
+# --- Live evacuation simulation (POST /api/demo/simulate) ------------------------------------------------
+SIM_PRIORITY_SHARE = 0.10        # share of virtual citizens that are priority citizens (accessible routes)
+SIM_SPAWN_RADIUS_M = 1500        # spawn scatter around the zone centre
+SIM_TICK_S = 1.0                 # one movement step + one sim_tick broadcast per second
+SIM_MAX_CITIZENS = 500
+SIM_MAX_SPEED = 200              # time multiplier cap (walking speed x speed)

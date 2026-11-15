@@ -133,7 +133,16 @@
       renderConn();
       requestRefresh();
     };
-    ws.onmessage = () => requestRefresh();
+    ws.onmessage = (ev) => {
+      let msg = null;
+      try { msg = JSON.parse(ev.data); } catch (e) { /* not JSON */ }
+      const events = msg && msg.type === "batch" ? msg.data : [msg];
+      let other = false;
+      for (const m of events) {
+        if (m && m.type === "sim_tick") onSimTick(m.data); else other = true;
+      }
+      if (other) requestRefresh();
+    };
     ws.onerror = () => { /* onclose follows */ };
     ws.onclose = () => {
       if (state.ws !== ws) return;
@@ -572,6 +581,64 @@
     });
   }
 
+  // --- live evacuation simulation: animated walkers (canvas) + status bar -----------------------------
+  const evac = { markers: new Map(), from: new Map(), to: new Map(), t0: 0, raf: null, layer: null, renderer: null, last: null };
+  const WALKER_COLOR = ["#38bdf8", "#4ade80", "#f87171"]; // moving, arrived, stuck
+
+  function onSimTick(d) {
+    evac.last = d;
+    renderEvacBar();
+    if (!map || !d.positions) return;
+    if (!evac.layer) { evac.renderer = L.canvas({ padding: 0.2 }); evac.layer = L.layerGroup().addTo(map); }
+    const seen = new Set();
+    evac.from = new Map();
+    for (const [id, lat, lon, prio, st] of d.positions) {
+      seen.add(id);
+      let m = evac.markers.get(id);
+      if (!m) {
+        m = L.circleMarker([lat, lon], { renderer: evac.renderer, radius: prio ? 5 : 3.5, weight: prio ? 2 : 1,
+          color: prio ? "#fbbf24" : "#0b1220", fillOpacity: 1, interactive: false }).addTo(evac.layer);
+        evac.markers.set(id, m);
+      }
+      m.setStyle({ fillColor: WALKER_COLOR[st] || WALKER_COLOR[0] });
+      evac.from.set(id, m.getLatLng());
+      evac.to.set(id, L.latLng(lat, lon));
+    }
+    for (const [id, m] of evac.markers) if (!seen.has(id)) { evac.layer.removeLayer(m); evac.markers.delete(id); evac.to.delete(id); }
+    evac.t0 = performance.now();
+    if (!evac.raf) evac.raf = requestAnimationFrame(animateEvac);
+  }
+  function animateEvac(now) {
+    const k = Math.min(1, (now - evac.t0) / 1000); // glide to the new position over one tick
+    for (const [id, m] of evac.markers) {
+      const a = evac.from.get(id), b = evac.to.get(id);
+      if (a && b) m.setLatLng([a.lat + (b.lat - a.lat) * k, a.lng + (b.lng - a.lng) * k]);
+    }
+    evac.raf = k < 1 ? requestAnimationFrame(animateEvac) : null;
+  }
+  function renderEvacBar() {
+    const d = evac.last;
+    const bar = $("#evac-bar");
+    if (!d || (!d.running && !d.spawned)) { bar.hidden = true; return; }
+    bar.hidden = false;
+    bar.classList.toggle("done", !d.running);
+    $("#evac-text").textContent = t(d.running ? "evac.status" : "evac.finished", d);
+    $("#evac-stop").hidden = !d.running;
+  }
+  function wireEvac() {
+    $("#evac-run").addEventListener("click", async () => {
+      const citizens = Math.max(1, Math.min(500, parseInt($("#evac-count").value, 10) || 150));
+      const speed = Math.max(1, Math.min(200, Number($("#evac-speed").value) || 20));
+      if (evac.layer) { evac.layer.clearLayers(); evac.markers.clear(); evac.to.clear(); }
+      const res = await action("/demo/simulate", { body: { citizens, speed } }, "evac.started");
+      if (res) { evac.last = res; renderEvacBar(); }
+    });
+    $("#evac-stop").addEventListener("click", async () => {
+      const res = await action("/demo/simulate/stop", {}, null);
+      if (res) { evac.last = res; renderEvacBar(); }
+    });
+  }
+
   // --- render all ----------------------------------------------------------------------------------------
   function render() {
     renderConn();
@@ -591,11 +658,12 @@
     renderPctLabel();
   }
 
-  document.addEventListener("langchange", render);
+  document.addEventListener("langchange", () => { render(); renderEvacBar(); });
 
   document.addEventListener("DOMContentLoaded", async () => {
     initMap();
     wireSimulator();
+    wireEvac();
     wireLogin();
     renderConn();
     if (authToken.get()) start(); else showLogin(null);
