@@ -228,7 +228,7 @@ A rendered version with Azerbaijani labels is in [docs/architecture.png](docs/ar
 - Technical write-up (Azerbaijani): [docs/TEXNIKI_IZAH.docx](docs/TEXNIKI_IZAH.docx), with its source in
   [docs/TEXNIKI_IZAH.md](docs/TEXNIKI_IZAH.md)
 - Load / flood test results: [docs/load-test-results.md](docs/load-test-results.md)
-- AI usage log: [AI_DECLARATION.md](AI_DECLARATION.md)
+- AI usage log: [AI_DECLARATION.md](AI_DECLARATION.md) (Azərbaycan dilində: [AI_DECLARATION_AZ.md](AI_DECLARATION_AZ.md))
 - Screenshots: [docs/screenshots/](docs/screenshots/)
 
 | | |

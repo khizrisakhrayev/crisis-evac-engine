@@ -1,10 +1,17 @@
 # AI Declaration
 
+> Azərbaycan dilində: [AI_DECLARATION_AZ.md](AI_DECLARATION_AZ.md)
+
 This project was built with AI assistance. Every AI-assisted task is logged below with its
 timestamp, the tool used, the prompt (condensed to its key requirements), a short summary of
 what was generated, and the files changed. Every change was reviewed by a team member before push.
 
 Timestamps are the time of the git commit that completed each task.
+
+**How AI was used.** A Claude project chat acted as architect and reviewer: it made the architecture choices
+with the team, wrote each task prompt below (including the Challenge Drop 1–3 solutions) and reviewed the
+results. Claude Code (Opus 5.5 / Fable 5.2) was the executor: it wrote the code, tests, load test and
+documents and ran them locally. Every change was reviewed by a team member before push.
 
 ---
 
@@ -121,3 +128,9 @@ Timestamps are the time of the git commit that completed each task.
 - *Prompt:* "Citizen map: dashed connector (blue, weight 4, dash 6 10, opacity 0.8) from the position to the route start and from the route end to the shelter when the gap is over 15 m, keeping the approach leg and removing connectors with the route. Headless check from a park or the water. Docs sync: test counts from pytest --collect-only, CLAUDE.md roles, rebuild the Word export if pandoc is quick."
 - *Summary:* Added gap connectors to the citizen route layer (the dispatcher map draws no citizen routes). In headless Chrome a position on Baku Bay shows the connector with no console errors. Test counts in README and TEXNIKI_IZAH updated to 117 tests in 11 files; CLAUDE.md roles already matched the code; TEXNIKI_IZAH.docx rebuilt with pandoc. 117 tests pass.
 - *Files changed:* frontend/citizen/citizen.js, README.md, docs/TEXNIKI_IZAH.md, docs/TEXNIKI_IZAH.docx
+
+## 2026-11-15 14:54
+- *Tool:* Claude Code
+- *Prompt:* "Final delivery polish, documentation only: create AI_DECLARATION_AZ.md (same entries, order and timestamps; translated header, labels and summaries; prompts kept verbatim in English; file paths unchanged) with cross-links between both files; check the delivery checklist (README run steps for local and Docker, Challenge Drop 1–3 adaptation, architecture diagram, links to both declarations, the technical note and load-test results; how AI was used; technical note coverage) and fix only documentation gaps."
+- *Summary:* Created the Azerbaijani declaration with cross-links, added a "How AI was used" paragraph to both versions and the AZ declaration link to the README. The delivery checklist is otherwise complete; no code changed.
+- *Files changed:* AI_DECLARATION.md, AI_DECLARATION_AZ.md, README.md
