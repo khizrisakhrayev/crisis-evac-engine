@@ -1,4 +1,4 @@
-// Shared API helpers. Role is sent as X-Role: page override (api.role) > localStorage "role" > "citizen".
+// Shared API helpers. X-Role: explicit {role} option > page override (api.role) > localStorage "role" > "citizen".
 
 const storage = {
   get(key, fallback = null) {
@@ -22,12 +22,12 @@ function getRole() {
   return api.role || storage.get("role", "citizen");
 }
 
-async function api(path, { method = "GET", body } = {}) {
+async function api(path, { method = "GET", body, role } = {}) {
   let res;
   try {
     res = await fetch("/api" + path, {
       method,
-      headers: { "Content-Type": "application/json", "X-Role": getRole() },
+      headers: { "Content-Type": "application/json", "X-Role": role || getRole() },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (e) {

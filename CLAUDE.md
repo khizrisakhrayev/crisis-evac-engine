@@ -13,7 +13,8 @@ backend/app/: main.py config.py db.py models.py schemas.py seed.py errors.py
 backend/app/routers/: shelters.py sos.py routing.py dispatch.py demo.py auth.py
 backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py roads.py evacuation.py crisis.py
                        dispatch.py demo.py ws.py
-frontend/citizen/ (index.html citizen.js), frontend/dispatcher/, frontend/shared/ (api.js i18n.js style.css)
+frontend/citizen/ (index.html citizen.js), frontend/dispatcher/ (index.html dispatcher.js),
+frontend/shared/ (api.js i18n.js style.css)
 tests/, docs/, README.md, AI_DECLARATION.md
 
 ## API contract (prefix /api)
@@ -71,7 +72,8 @@ Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispa
 - Roles: auth.py has a single `require_role(...)` dependency; role comes from X-Role header for now.
 - Languages: all UI strings in frontend/shared/i18n.js dictionaries (az, en). No hard-coded UI text.
   HTML uses data-i18n / data-i18n-placeholder / data-i18n-aria; JS uses t(key, params) and re-renders on the
-  "langchange" event. Frontend calls go through api(path, {method, body}) (shared/api.js), which throws ApiError{code}.
+  "langchange" event. Frontend calls go through api(path, {method, body, role}) (shared/api.js), which throws ApiError{code};
+  the dispatcher page always passes role "dispatcher" and never touches the citizen's saved role.
   The API returns codes only (status, hazard_type, priority_label, reason, type, error code); raise errors with
   errors.api_error(status, code, message). Names of shelters/zones/brigades are data, not translated.
 - External routing sits behind services/routing_provider.py with a local-graph fallback.

@@ -8,10 +8,12 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/shared/style.css">
 </head>
-<body>
+<body class="theme-dark">
   <header class="app-header">
-    <h1 data-i18n="app_title"></h1>
+    <h1><span data-i18n="app_title"></span> · <span data-i18n="dash.title"></span></h1>
     <nav>
+      <span id="conn-chip" class="chip chip-warn"></span>
+      <span id="routing-chip" class="chip chip-ok"></span>
       <div class="lang-switch" role="group" data-i18n-aria="lang.label">
         <button type="button" data-lang="az" data-i18n="lang.az"></button>
         <button type="button" data-lang="en" data-i18n="lang.en"></button>
@@ -19,13 +21,108 @@
       <a href="/" data-i18n="nav.citizen"></a>
     </nav>
   </header>
-  <main class="placeholder">
-    <h2 data-i18n="dispatcher_title"></h2>
-    <p class="muted" data-i18n="placeholder"></p>
+
+  <main class="dash">
+    <section id="red-alerts" class="red-alert-area" aria-live="assertive"></section>
+
+    <section class="kpis">
+      <div class="kpi" id="kpi-active"><div class="value"></div><div class="label" data-i18n="kpi.active_sos"></div></div>
+      <div class="kpi" id="kpi-priority"><div class="value"></div><div class="label" data-i18n="kpi.priority_sos"></div></div>
+      <div class="kpi" id="kpi-alerts"><div class="value"></div><div class="label" data-i18n="kpi.open_alerts"></div></div>
+      <div class="kpi" id="kpi-brigades"><div class="value"></div><div class="label" data-i18n="kpi.brigades"></div></div>
+      <div class="kpi" id="kpi-occupancy"><div class="value"></div><div class="label" data-i18n="kpi.avg_occupancy"></div></div>
+    </section>
+
+    <section class="dash-grid">
+      <div id="dmap" role="application" data-i18n-aria="map.label"></div>
+      <div class="dash-side">
+        <section class="card">
+          <h2 data-i18n="panel.sos"></h2>
+          <ul id="sos-feed" class="feed"></ul>
+        </section>
+        <section class="card">
+          <h2 data-i18n="panel.brigades"></h2>
+          <ul id="brigade-list" class="feed"></ul>
+        </section>
+      </div>
+    </section>
+
+    <section class="dash-row">
+      <section class="card">
+        <h2 data-i18n="panel.shelters"></h2>
+        <p class="hint" data-i18n="shelter.ticks"></p>
+        <ul id="shelter-list" class="feed"></ul>
+      </section>
+      <section class="card">
+        <h2 data-i18n="panel.zones"></h2>
+        <table class="data-table">
+          <thead><tr>
+            <th data-i18n="zones.zone"></th>
+            <th class="num" data-i18n="zones.active"></th>
+            <th class="num" data-i18n="zones.priority"></th>
+          </tr></thead>
+          <tbody id="zone-rows"></tbody>
+        </table>
+      </section>
+      <section class="card">
+        <h2 data-i18n="panel.history"></h2>
+        <ul id="alert-history" class="feed"></ul>
+      </section>
+    </section>
+
+    <details id="sim" class="sim">
+      <summary data-i18n="sim.title"></summary>
+      <p class="hint" data-i18n="sim.point_hint"></p>
+      <div class="row" role="group" data-i18n-aria="sim.mode">
+        <span data-i18n="sim.mode"></span>
+        <button type="button" id="sim-mode-point" class="btn" data-i18n="sim.mode_point"></button>
+        <button type="button" id="sim-mode-roads" class="btn" data-i18n="sim.mode_roads"></button>
+      </div>
+      <p id="sim-point" class="small"></p>
+      <div class="sim-grid">
+        <fieldset>
+          <legend data-i18n="sim.burst"></legend>
+          <label><span data-i18n="sim.hazard"></span>
+            <select id="sim-hazard">
+              <option value="fire" data-i18n="hazard.fire"></option>
+              <option value="collapse" data-i18n="hazard.collapse"></option>
+              <option value="flood" data-i18n="hazard.flood"></option>
+              <option value="medical" data-i18n="hazard.medical"></option>
+            </select>
+          </label>
+          <label><span data-i18n="sim.count"></span>
+            <input id="sim-count" type="number" min="1" max="20" value="4">
+          </label>
+          <button type="button" id="sim-burst" class="btn btn-primary" data-i18n="sim.send_burst"></button>
+          <button type="button" id="sim-priority" class="btn" data-i18n="sim.priority_sos"></button>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="sim.occupancy"></legend>
+          <label><span data-i18n="sim.shelter"></span>
+            <select id="sim-shelter"></select>
+          </label>
+          <label><span id="sim-pct-label"></span>
+            <input id="sim-pct" type="range" min="0" max="100" step="1" value="50">
+          </label>
+          <button type="button" id="sim-apply" class="btn btn-primary" data-i18n="sim.apply"></button>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="sim.routing"></legend>
+          <div class="row">
+            <button type="button" id="sim-ext-up" class="btn" data-i18n="sim.up"></button>
+            <button type="button" id="sim-ext-down" class="btn" data-i18n="sim.down"></button>
+          </div>
+          <button type="button" id="sim-reset" class="btn" data-i18n="sim.reset"></button>
+        </fieldset>
+      </div>
+    </details>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/shared/i18n.js"></script>
   <script src="/shared/api.js"></script>
-  <script>api.role = "dispatcher";</script>
+  <script src="/dispatcher/dispatcher.js"></script>
 </body>
 </html>
