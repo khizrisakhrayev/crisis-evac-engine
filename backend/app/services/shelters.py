@@ -23,14 +23,17 @@ def open_shelters_by_distance(db: Session, lat: float, lon: float) -> list[Neare
 
 
 def nearest_shelters(db: Session, lat: float | None, lon: float | None,
-                     district: geo.ZoneRef | None, limit: int) -> list[NearestShelterOut]:
+                     district: geo.ZoneRef | None, limit: int, accessible_only: bool = False) -> list[NearestShelterOut]:
     """Open shelters sorted by distance from (lat, lon), or from the district centre if no point given.
 
     When a district is given, its shelters come first (each group sorted by distance).
+    accessible_only: only wheelchair-accessible shelters (priority citizens).
     """
     if lat is None or lon is None:
         lat, lon = district.lat, district.lon
     items = open_shelters_by_distance(db, lat, lon)
+    if accessible_only:
+        items = [i for i in items if i.is_accessible]
     if district:
         items.sort(key=lambda i: i.zone_id != district.id)  # stable: keeps distance order within groups
     return items[:limit]

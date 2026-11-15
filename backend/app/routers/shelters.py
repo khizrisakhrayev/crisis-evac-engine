@@ -5,12 +5,12 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..errors import api_error
 from ..models import Shelter
-from ..schemas import NearestShelterOut, OccupancyUpdate, ShelterOut
+from ..schemas import NearestShelterOut, OccupancyUpdate, ShelterOut, ZoneOut
 from ..services import geo
 from ..services import crisis
 from ..services import shelters as svc
 from ..services.ws import publish, publish_alert
-from .auth import require_role
+from .auth import PRIORITY_ROLES, current_role, require_role
 
 router = APIRouter(tags=["shelters"])
 
@@ -18,6 +18,11 @@ router = APIRouter(tags=["shelters"])
 @router.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@router.get("/zones", response_model=list[ZoneOut])
+def list_zones():
+    return [ZoneOut(id=z.id, name=z.name, center_lat=z.lat, center_lon=z.lon) for z in geo.zones()]
 
 
 @router.get("/shelters", response_model=list[ShelterOut])
@@ -31,6 +36,8 @@ def nearest_shelters(
     lon: float | None = Query(None, ge=-180, le=180),
     district: str | None = None,
     limit: int = Query(5, ge=1, le=50),
+    accessible: bool = False,
+    role: str = Depends(current_role),
     db: Session = Depends(get_db),
 ):
     has_point = lat is not None and lon is not None
@@ -43,7 +50,8 @@ def nearest_shelters(
         zone = geo.zone_by_name(district)
         if zone is None:
             raise api_error(404, "unknown_district", f"Unknown district: {district}")
-    return svc.nearest_shelters(db, lat, lon, zone, limit)
+    accessible_only = accessible or role in PRIORITY_ROLES  # forced for priority citizens
+    return svc.nearest_shelters(db, lat, lon, zone, limit, accessible_only=accessible_only)
 
 
 @router.post("/shelters/{shelter_id}/occupancy", response_model=ShelterOut,

@@ -3,23 +3,94 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title data-i18n="citizen_title">Citizen</title>
+  <title data-i18n="nav.citizen">Citizen</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/shared/style.css">
 </head>
 <body>
-  <header>
-    <h1><span data-i18n="app_title"></span> · <span data-i18n="citizen_title"></span></h1>
+  <header class="app-header">
+    <h1 data-i18n="app_title"></h1>
     <nav>
-      <a href="/dispatcher/" data-i18n="go_dispatcher"></a>
-      <select id="lang-select" aria-label="lang"><option value="az">AZ</option><option value="en">EN</option></select>
+      <div class="lang-switch" role="group" data-i18n-aria="lang.label">
+        <button type="button" data-lang="az" data-i18n="lang.az"></button>
+        <button type="button" data-lang="en" data-i18n="lang.en"></button>
+      </div>
+      <a href="/dispatcher/" data-i18n="nav.dispatcher"></a>
     </nav>
   </header>
-  <main>
-    <p class="muted" data-i18n="placeholder"></p>
+
+  <div id="banner" class="banner" role="alert" hidden>
+    <div>
+      <strong id="banner-title"></strong>
+      <p id="banner-text"></p>
+      <p id="banner-target"></p>
+    </div>
+    <button type="button" id="banner-close" class="btn" data-i18n="banner.dismiss"></button>
+  </div>
+
+  <main class="layout">
+    <section class="map-wrap">
+      <div id="map" role="application" data-i18n-aria="map.label"></div>
+    </section>
+
+    <div class="panel">
+      <section class="card" id="profile-card">
+        <h2 data-i18n="profile.title"></h2>
+        <div class="toggle">
+          <button type="button" class="btn" data-role="citizen" data-i18n="profile.citizen"></button>
+          <button type="button" class="btn" data-role="priority_citizen" data-i18n="profile.priority"></button>
+        </div>
+        <span id="priority-badge" class="badge" data-i18n="profile.badge" hidden></span>
+      </section>
+
+      <section class="card" id="sos-card">
+        <h2 data-i18n="sos.title"></h2>
+        <p class="hint" data-i18n="sos.hint"></p>
+        <div id="sos-buttons" class="sos-grid">
+          <button type="button" class="sos-btn" data-hazard="fire"><span class="icon" aria-hidden="true">🔥</span><span data-i18n="hazard.fire"></span></button>
+          <button type="button" class="sos-btn" data-hazard="collapse"><span class="icon" aria-hidden="true">🏚️</span><span data-i18n="hazard.collapse"></span></button>
+          <button type="button" class="sos-btn" data-hazard="flood"><span class="icon" aria-hidden="true">🌊</span><span data-i18n="hazard.flood"></span></button>
+          <button type="button" class="sos-btn" data-hazard="medical"><span class="icon" aria-hidden="true">🚑</span><span data-i18n="hazard.medical"></span></button>
+        </div>
+        <div id="sos-active" class="sos-active" hidden>
+          <h3 data-i18n="sos.active_title"></h3>
+          <p id="sos-active-hazard"></p>
+          <p id="sos-active-time" class="small"></p>
+          <p id="sos-active-priority"></p>
+          <button type="button" id="safe-btn" class="btn btn-safe" data-i18n="sos.safe_btn"></button>
+        </div>
+      </section>
+
+      <section class="card" id="location-card">
+        <h2 data-i18n="location.title"></h2>
+        <div class="row">
+          <button type="button" id="locate-btn" class="btn btn-primary" data-i18n="location.use_mine"></button>
+          <select id="district-select" class="btn" data-i18n-aria="location.district">
+            <option value="" data-i18n="location.district"></option>
+          </select>
+        </div>
+        <p class="hint" data-i18n="location.hint"></p>
+      </section>
+
+      <section class="card" id="route-card">
+        <h2 data-i18n="route.title"></h2>
+        <div id="route-body"></div>
+      </section>
+
+      <section class="card" id="nearest-card">
+        <h2 data-i18n="nearest.title"></h2>
+        <p class="hint" data-i18n="nearest.pick_hint"></p>
+        <ul id="nearest-list" class="shelter-list"></ul>
+      </section>
+    </div>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/shared/i18n.js"></script>
   <script src="/shared/api.js"></script>
+  <script src="/citizen.js"></script>
 </body>
 </html>

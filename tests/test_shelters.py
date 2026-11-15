@@ -85,3 +85,22 @@ def test_occupancy_clamps_and_is_full(client):
 
 def test_occupancy_unknown_shelter_404(client):
     assert client.post("/api/shelters/9999/occupancy", json={"current": 1}, headers=DISPATCHER).status_code == 404
+
+
+def test_nearest_accessible_filter(client):
+    params = {"lat": 40.3777, "lon": 49.8920, "limit": 50}
+    default = client.get("/api/shelters/nearest", params=params).json()
+    assert any(not s["is_accessible"] for s in default) and default[0]["id"] == 10  # Khatai District (basement)
+    for r in (client.get("/api/shelters/nearest", params=params, headers={"X-Role": "priority_citizen"}),
+              client.get("/api/shelters/nearest", params={**params, "accessible": "true"})):
+        data = r.json()
+        assert data and all(s["is_accessible"] for s in data) and 10 not in [s["id"] for s in data]
+    forced = client.get("/api/shelters/nearest", params={**params, "accessible": "false"},
+                        headers={"X-Role": "priority_citizen"}).json()
+    assert all(s["is_accessible"] for s in forced)
+
+
+def test_zones_endpoint(client):
+    zones = client.get("/api/zones").json()
+    assert len(zones) == 5 and {"id", "name", "center_lat", "center_lon"} <= zones[0].keys()
+    assert "Khatai" in [z["name"] for z in zones]

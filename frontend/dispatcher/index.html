@@ -3,19 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title data-i18n="dispatcher_title">Dispatcher</title>
+  <title data-i18n="nav.dispatcher">Dispatcher</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/shared/style.css">
 </head>
 <body>
-  <header>
-    <h1><span data-i18n="app_title"></span> · <span data-i18n="dispatcher_title"></span></h1>
+  <header class="app-header">
+    <h1 data-i18n="app_title"></h1>
     <nav>
-      <a href="/" data-i18n="go_citizen"></a>
-      <select id="lang-select" aria-label="lang"><option value="az">AZ</option><option value="en">EN</option></select>
+      <div class="lang-switch" role="group" data-i18n-aria="lang.label">
+        <button type="button" data-lang="az" data-i18n="lang.az"></button>
+        <button type="button" data-lang="en" data-i18n="lang.en"></button>
+      </div>
+      <a href="/" data-i18n="nav.citizen"></a>
     </nav>
   </header>
-  <main>
+  <main class="placeholder">
+    <h2 data-i18n="dispatcher_title"></h2>
     <p class="muted" data-i18n="placeholder"></p>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
