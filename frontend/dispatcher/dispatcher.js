@@ -396,9 +396,9 @@
     for (const s of state.ov.sos) {
       const hz = HAZARD[s.hazard_type] || { icon: "🆘" };
       const li = el("li", s.priority === 1 ? "prio" : "");
-      li.append(el("span", "grow", `${hz.icon} ${label("hazard", s.hazard_type)}`));
+      li.append(el("span", `chip-hazard hz-${s.hazard_type}`, `${hz.icon} ${label("hazard", s.hazard_type)}`));
       if (s.priority === 1) li.append(el("span", "tag tag-priority", label("priority", s.priority_label)));
-      li.append(el("span", null, zoneName(s.zone_id)), el("span", "small", timeAgo(s.created_at)),
+      li.append(el("span", "grow", zoneName(s.zone_id)), el("span", "small", timeAgo(s.created_at)),
         el("span", "tag tag-muted", label("status", s.status)));
       list.append(li);
     }

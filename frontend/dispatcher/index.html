@@ -49,89 +49,94 @@
     </section>
 
     <section class="dash-grid">
-      <div id="dmap" role="application" data-i18n-aria="map.label"></div>
+      <div class="map-wrap">
+        <div id="dmap" role="application" data-i18n-aria="map.label"></div>
+        <ul class="map-legend" data-i18n-aria="legend.title">
+          <li><i class="lg-sos"></i><span data-i18n="legend.sos"></span></li>
+          <li><i class="lg-sos-prio"></i><span data-i18n="legend.sos_priority"></span></li>
+          <li><i class="lg-shelter"></i><span data-i18n="legend.shelter"></span></li>
+          <li><i class="lg-closed"></i><span data-i18n="legend.closed"></span></li>
+          <li><i class="lg-cluster"></i><span data-i18n="legend.cluster"></span></li>
+        </ul>
+      </div>
       <div class="dash-side">
         <section class="card">
           <h2 data-i18n="panel.sos"></h2>
-          <ul id="sos-feed" class="feed"></ul>
+          <ul id="sos-feed" class="feed scroll"></ul>
+        </section>
+        <section class="card">
+          <h2 data-i18n="panel.shelters"></h2>
+          <p class="hint" data-i18n="shelter.ticks"></p>
+          <ul id="shelter-list" class="feed scroll"></ul>
         </section>
         <section class="card">
           <h2 data-i18n="panel.brigades"></h2>
-          <ul id="brigade-list" class="feed"></ul>
+          <ul id="brigade-list" class="feed scroll"></ul>
         </section>
-      </div>
-    </section>
-
-    <section class="dash-row">
-      <section class="card">
-        <h2 data-i18n="panel.shelters"></h2>
-        <p class="hint" data-i18n="shelter.ticks"></p>
-        <ul id="shelter-list" class="feed"></ul>
-      </section>
-      <section class="card">
-        <h2 data-i18n="panel.zones"></h2>
-        <table class="data-table">
-          <thead><tr>
-            <th data-i18n="zones.zone"></th>
-            <th class="num" data-i18n="zones.active"></th>
-            <th class="num" data-i18n="zones.priority"></th>
-          </tr></thead>
-          <tbody id="zone-rows"></tbody>
-        </table>
-      </section>
-      <section class="card">
-        <h2 data-i18n="panel.history"></h2>
-        <ul id="alert-history" class="feed"></ul>
-      </section>
-    </section>
-
-    <details id="sim" class="sim">
-      <summary data-i18n="sim.title"></summary>
-      <p class="hint" data-i18n="sim.point_hint"></p>
-      <div class="row" role="group" data-i18n-aria="sim.mode">
-        <span data-i18n="sim.mode"></span>
-        <button type="button" id="sim-mode-point" class="btn" data-i18n="sim.mode_point"></button>
-        <button type="button" id="sim-mode-roads" class="btn" data-i18n="sim.mode_roads"></button>
-      </div>
-      <p id="sim-point" class="small"></p>
-      <div class="sim-grid">
-        <fieldset>
-          <legend data-i18n="sim.burst"></legend>
-          <label><span data-i18n="sim.hazard"></span>
-            <select id="sim-hazard">
-              <option value="fire" data-i18n="hazard.fire"></option>
-              <option value="collapse" data-i18n="hazard.collapse"></option>
-              <option value="flood" data-i18n="hazard.flood"></option>
-              <option value="medical" data-i18n="hazard.medical"></option>
-            </select>
-          </label>
-          <label><span data-i18n="sim.count"></span>
-            <input id="sim-count" type="number" min="1" max="20" value="4">
-          </label>
-          <button type="button" id="sim-burst" class="btn btn-primary" data-i18n="sim.send_burst"></button>
-          <button type="button" id="sim-priority" class="btn" data-i18n="sim.priority_sos"></button>
-        </fieldset>
-        <fieldset>
-          <legend data-i18n="sim.occupancy"></legend>
-          <label><span data-i18n="sim.shelter"></span>
-            <select id="sim-shelter"></select>
-          </label>
-          <label><span id="sim-pct-label"></span>
-            <input id="sim-pct" type="range" min="0" max="100" step="1" value="50">
-          </label>
-          <button type="button" id="sim-apply" class="btn btn-primary" data-i18n="sim.apply"></button>
-        </fieldset>
-        <fieldset>
-          <legend data-i18n="sim.routing"></legend>
-          <div class="row">
-            <button type="button" id="sim-ext-up" class="btn" data-i18n="sim.up"></button>
-            <button type="button" id="sim-ext-down" class="btn" data-i18n="sim.down"></button>
-            <button type="button" id="sim-ext-slow" class="btn" data-i18n="sim.slow"></button>
+        <section class="card">
+          <h2 data-i18n="panel.zones"></h2>
+          <table class="data-table">
+            <thead><tr>
+              <th data-i18n="zones.zone"></th>
+              <th class="num" data-i18n="zones.active"></th>
+              <th class="num" data-i18n="zones.priority"></th>
+            </tr></thead>
+            <tbody id="zone-rows"></tbody>
+          </table>
+        </section>
+        <section class="card">
+          <h2 data-i18n="panel.history"></h2>
+          <ul id="alert-history" class="feed scroll"></ul>
+        </section>
+        <details id="sim" class="sim">
+          <summary data-i18n="sim.title"></summary>
+          <p class="hint" data-i18n="sim.point_hint"></p>
+          <div class="row" role="group" data-i18n-aria="sim.mode">
+            <span data-i18n="sim.mode"></span>
+            <button type="button" id="sim-mode-point" class="btn" data-i18n="sim.mode_point"></button>
+            <button type="button" id="sim-mode-roads" class="btn" data-i18n="sim.mode_roads"></button>
           </div>
-          <button type="button" id="sim-reset" class="btn" data-i18n="sim.reset"></button>
-        </fieldset>
+          <p id="sim-point" class="small"></p>
+          <div class="sim-grid">
+            <fieldset>
+              <legend data-i18n="sim.burst"></legend>
+              <label><span data-i18n="sim.hazard"></span>
+                <select id="sim-hazard">
+                  <option value="fire" data-i18n="hazard.fire"></option>
+                  <option value="collapse" data-i18n="hazard.collapse"></option>
+                  <option value="flood" data-i18n="hazard.flood"></option>
+                  <option value="medical" data-i18n="hazard.medical"></option>
+                </select>
+              </label>
+              <label><span data-i18n="sim.count"></span>
+                <input id="sim-count" type="number" min="1" max="20" value="4">
+              </label>
+              <button type="button" id="sim-burst" class="btn btn-primary" data-i18n="sim.send_burst"></button>
+              <button type="button" id="sim-priority" class="btn" data-i18n="sim.priority_sos"></button>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="sim.occupancy"></legend>
+              <label><span data-i18n="sim.shelter"></span>
+                <select id="sim-shelter"></select>
+              </label>
+              <label><span id="sim-pct-label"></span>
+                <input id="sim-pct" type="range" min="0" max="100" step="1" value="50">
+              </label>
+              <button type="button" id="sim-apply" class="btn btn-primary" data-i18n="sim.apply"></button>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="sim.routing"></legend>
+              <div class="row">
+                <button type="button" id="sim-ext-up" class="btn" data-i18n="sim.up"></button>
+                <button type="button" id="sim-ext-down" class="btn" data-i18n="sim.down"></button>
+                <button type="button" id="sim-ext-slow" class="btn" data-i18n="sim.slow"></button>
+              </div>
+              <button type="button" id="sim-reset" class="btn" data-i18n="sim.reset"></button>
+            </fieldset>
+          </div>
+        </details>
       </div>
-    </details>
+    </section>
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

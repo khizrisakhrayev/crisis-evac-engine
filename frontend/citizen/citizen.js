@@ -138,8 +138,8 @@
         interactive: false }).addTo(routeLayer);
     }
     if (route && route.path && route.path.length > 1) { // street-following route: thick with a white casing
-      L.polyline(route.path, { color: "#ffffff", weight: 10, opacity: 0.9, interactive: false }).addTo(routeLayer);
-      L.polyline(route.path, { color: "#0d47a1", weight: 6, opacity: 0.95, interactive: false }).addTo(routeLayer);
+      L.polyline(route.path, { color: "#ffffff", weight: 12, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false }).addTo(routeLayer);
+      L.polyline(route.path, { color: "#1d4ed8", weight: 7, opacity: 1, lineCap: "round", lineJoin: "round", interactive: false }).addTo(routeLayer);
     }
     shelterLayer.clearLayers();
     const shown = [...state.nearest];
@@ -261,6 +261,7 @@
   function renderProfile() {
     document.querySelectorAll("[data-role]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.role === getRole())));
     $("#priority-badge").hidden = !isPriority();
+    document.body.classList.toggle("is-priority", isPriority());
   }
 
   function renderRoute() {
@@ -272,9 +273,13 @@
       body.append(el("p", "notice-danger", t(`reason.${route.reason || "no_accessible_route"}`)));
       return;
     }
-    const dl = el("dl", "route-grid");
-    const add = (labelKey, value) => { dl.append(el("dt", null, t(labelKey)), el("dd", null, value)); };
-    add("route.target", `${TYPE_ICON[route.shelter.type] || "📍"} ${route.shelter.name}`);
+    body.append(el("p", "route-target", `${TYPE_ICON[route.shelter.type] || "📍"} ${route.shelter.name}`));
+    const dl = el("dl", "route-stats");
+    const add = (labelKey, value) => {
+      const box = el("div", "stat");
+      box.append(el("dt", null, t(labelKey)), el("dd", null, value));
+      dl.append(box);
+    };
     add("route.distance", fmtDistance(route.distance_m));
     add("route.eta", route.eta_min === null ? "—" : t("route.eta_value", { min: route.eta_min }));
     body.append(dl);
