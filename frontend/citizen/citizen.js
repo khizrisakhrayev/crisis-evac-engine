@@ -124,21 +124,22 @@
     if (tiles.isOffline()) { // offline base map: every road as a thin vector line
       for (const r of state.roads) {
         if (r.is_closed) continue;
-        L.polyline([[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]], {
-          color: "#6b7280", weight: 3, opacity: 0.8, interactive: false,
-        }).addTo(closedLayer);
+        L.polyline(roadLine(r), { color: "#6b7280", weight: 3, opacity: 0.8, interactive: false }).addTo(closedLayer);
       }
     }
     for (const r of state.roads) {
       if (!r.is_closed) continue;
-      L.polyline([[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]], {
-        color: "#b71c1c", weight: 5, dashArray: "10 8", interactive: false,
-      }).addTo(closedLayer);
+      L.polyline(roadLine(r), { color: "#b71c1c", weight: 5, dashArray: "10 8", interactive: false }).addTo(closedLayer);
     }
     routeLayer.clearLayers();
     const route = state.route;
-    if (route && route.path && route.path.length > 1) {
-      L.polyline(route.path, { color: "#0d47a1", weight: 6, opacity: 0.9, interactive: false }).addTo(routeLayer);
+    if (route && route.approach && route.approach.length > 1) { // straight walk to the first street: dashed
+      L.polyline(route.approach, { color: "#0d47a1", weight: 4, opacity: 0.85, dashArray: "2 10", lineCap: "round",
+        interactive: false }).addTo(routeLayer);
+    }
+    if (route && route.path && route.path.length > 1) { // street-following route: thick with a white casing
+      L.polyline(route.path, { color: "#ffffff", weight: 10, opacity: 0.9, interactive: false }).addTo(routeLayer);
+      L.polyline(route.path, { color: "#0d47a1", weight: 6, opacity: 0.95, interactive: false }).addTo(routeLayer);
     }
     shelterLayer.clearLayers();
     const shown = [...state.nearest];
@@ -156,9 +157,12 @@
     }
   }
 
+  const roadLine = (r) => (r.geometry && r.geometry.length > 1 ? r.geometry : [[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]]);
+
   function fitRoute() {
     if (!map || !state.route || !state.route.path || state.route.path.length < 2) return;
-    map.fitBounds(L.latLngBounds(state.route.path), { padding: [40, 40], maxZoom: 16 });
+    const pts = [...(state.route.approach || []), ...state.route.path];
+    map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 16 });
   }
 
   // --- position ------------------------------------------------------------------

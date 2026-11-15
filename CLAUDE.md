@@ -9,7 +9,8 @@ Hackathon prototype (deadline 15:00). Working MVP first, no over-engineering.
 - Test: `pytest -q`
 
 ## Layout
-backend/app/: main.py config.py db.py models.py schemas.py seed.py errors.py
+backend/app/: main.py config.py db.py models.py schemas.py seed.py errors.py, data/road_geometry.json (committed)
+backend/scripts/snap_roads.py (one-off, manual: python -m backend.scripts.snap_roads [--shelters-only])
 backend/app/routers/: shelters.py sos.py routing.py dispatch.py demo.py auth.py
 backend/app/services/: geo.py clock.py shelters.py sos.py routing_provider.py circuit_breaker.py roads.py evacuation.py
                        crisis.py dispatch.py demo.py ws.py
@@ -31,8 +32,11 @@ Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispa
                                                          shelter_not_accessible|no_accessible_route, original_shelter_id,
                                                          provider: external|local-graph|route-cache|static-matrix, edge_ids,
                                                          accessible, needs_medical_transport, degraded, mode: online|fallback,
-                                                         notice_code: offline_backup_routing|null}
-- GET  /roads                                        -> edges with from/to coordinates, is_closed, is_accessible
+                                                         notice_code: offline_backup_routing|null, approach, approach_m}
+                                                         path = street geometry first road node -> shelter entrance;
+                                                         approach = straight citizen -> first node (draw dashed);
+                                                         distance_m/eta_min include approach
+- GET  /roads                                        -> edges with from/to coordinates, is_closed, is_accessible, geometry
 - POST /roads/{id}/close, POST /roads/{id}/open      -> operator
 - GET  /routing/status                               -> {mode, external_mode: up|down_503|slow, external_up,
                                                          breaker: {state: closed|open|half_open, consecutive_failures,
@@ -78,6 +82,12 @@ Roles via X-Role header (auth.ROLES): citizen (default), priority_citizen, dispa
 - Priority citizens (auth.PRIORITY_ROLES): SOS priority 1 (critical), a repeat SOS never downgrades it.
   Routes are accessible-only (accessible edges + accessible shelters), never straight-line; if nothing is reachable
   return reason "no_accessible_route" with needs_medical_transport=true. Other roles may opt in with ?accessible=true.
+- Street geometry (P1): data/road_geometry.json was generated once from OSM (routing.openstreetmap.de foot profile,
+  (c) OpenStreetMap contributors) - never called at runtime. Seed loads snapped node coords, edge geometry + real
+  length_m, and per shelter 3 access paths (from its 3 nearest nodes); routing picks the cheapest street walk + access.
+  Roads whose real walk > MAX_EDGE_DETOUR_RATIO (2.5) x straight are dropped (Sabail C-W); a node left without an
+  accessible road gets its shortest road re-linked as accessible (Sabail S-W). All providers incl. fallbacks return
+  street geometry; static-matrix stays a straight line.
 - Thresholds live in config.py, never hard-coded elsewhere.
 
 ## Design for change (jury will add surprise requirements)

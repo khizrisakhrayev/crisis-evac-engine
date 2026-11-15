@@ -27,7 +27,7 @@ def test_seed_counts_and_idempotent(client):
         assert count(Shelter) == 14
         assert count(Brigade) == 6
         assert count(RoadNode) == 25
-        assert count(RoadEdge) == 45
+        assert count(RoadEdge) == 44  # one >2.5x detour road dropped (seed.SEED_REPORT)
 
 
 def test_seed_coords_inside_baku(client):

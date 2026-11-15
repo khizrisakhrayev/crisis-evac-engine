@@ -31,6 +31,12 @@ class Shelter(Base):
     is_accessible: Mapped[bool] = mapped_column(Boolean, default=True)  # step-free / wheelchair-usable
     is_reserve: Mapped[bool] = mapped_column(Boolean, default=False)  # closed until a Red Alert opens it
     is_temporary: Mapped[bool] = mapped_column(Boolean, default=False)  # created on confirm when no reserve left
+    # Real walking access from the road graph to the entrance (from data/road_geometry.json); None for temporary ones.
+    access_node_id: Mapped[int | None] = mapped_column(ForeignKey("road_nodes.id"), nullable=True)
+    access_path: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [[lat, lon], ...] node -> shelter
+    access_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # All candidate entries [{"node_id", "path", "m"}] (3 nearest nodes); routing picks the cheapest total walk.
+    access_options: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
 
 class RoadNode(Base):
@@ -50,6 +56,7 @@ class RoadEdge(Base):
     length_m: Mapped[float] = mapped_column(Float)
     is_closed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_accessible: Mapped[bool] = mapped_column(Boolean, default=True)  # False = stairs / steep link
+    geometry: Mapped[list | None] = mapped_column(JSON, nullable=True)  # real street polyline [[lat, lon], ...] from -> to
 
 
 class SOS(Base):

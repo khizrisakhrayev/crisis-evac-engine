@@ -268,7 +268,7 @@
 
     const roadMode = simOpen() && state.clickMode === "roads"; // wide hit lines only when toggling roads
     for (const r of state.roads) {
-      const coords = [[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]];
+      const coords = r.geometry && r.geometry.length > 1 ? r.geometry : [[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]];
       const style = r.is_closed ? { color: "#ff1744", weight: 5, dashArray: "10 8", opacity: 1 }
         : !r.is_accessible ? { color: "#9e9e9e", weight: 2, opacity: 0.8 }
         : { color: "#5c7cfa", weight: 3, opacity: 0.55 };

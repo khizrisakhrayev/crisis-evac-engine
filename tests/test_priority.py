@@ -105,7 +105,7 @@ def test_normal_citizen_route_unchanged(client):
     assert r["shelter"]["id"] == KHATAI_SHELTER and r["accessible"] is False
     with SessionLocal() as db:
         s = db.get(Shelter, KHATAI_SHELTER)
-        expected = rp.graph_route(rp.load_graph(db), ORIGIN["from_lat"], ORIGIN["from_lon"], s.lat, s.lon)
+        expected = rp.graph_route(rp.load_graph(db), ORIGIN["from_lat"], ORIGIN["from_lon"], s.lat, s.lon, shelter_id=s.id)
     assert r["path"] == expected.path and r["edge_ids"] == expected.edge_ids
 
 
@@ -137,7 +137,7 @@ def test_closed_edge_on_accessible_route(client):
 
 
 def test_no_accessible_route_needs_medical_transport(client):
-    snap = route(client, PRIO)["path"][1]
+    snap = route(client, PRIO)["path"][0]  # street path starts at the snapped road node
     touching = [e for e in roads(client).values()
                 if e["is_accessible"] and snap in ([e["from_lat"], e["from_lon"]], [e["to_lat"], e["to_lon"]])]
     assert touching

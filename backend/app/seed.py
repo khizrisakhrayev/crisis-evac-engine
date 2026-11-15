@@ -1,12 +1,20 @@
-"""Idempotent seed for Baku: 5 zones, 10 shelters + 4 closed reserves, 6 brigades, 25-node / 45-edge road graph.
+"""Idempotent seed for Baku: 5 zones, 10 shelters + 4 closed reserves, 6 brigades, 25-node / ~45-edge road graph.
 
-Coordinates are approximate (real landmarks, rounded); good enough for a demo map.
+Shelter coordinates are approximate real landmarks. Road nodes, street geometry, real walking lengths and shelter
+access paths come from data/road_geometry.json (OSM, generated once by backend/scripts/snap_roads.py).
 """
+import json
+import logging
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import config
 from .models import Brigade, RoadEdge, RoadNode, Shelter, Zone
 from .services.geo import haversine_m
+
+log = logging.getLogger(__name__)
 
 ZONES = {  # name: (center_lat, center_lon)
     "Nasimi": (40.3800, 49.8320),
@@ -68,45 +76,84 @@ INTER_EDGES = [  # 5 links between neighbouring zones -> 45 total
 ]
 
 
+GEOMETRY_FILE = Path(__file__).resolve().parent / "data" / "road_geometry.json"
+SEED_REPORT: dict[str, list[str]] = {"dropped": [], "relinked": []}
+
+
+def load_geometry() -> dict | None:
+    """Precomputed OSM street geometry (backend/scripts/snap_roads.py); None -> straight synthetic graph."""
+    try:
+        return json.loads(GEOMETRY_FILE.read_text())
+    except (OSError, ValueError):
+        log.warning("road geometry file missing/invalid - using straight synthetic roads")
+        return None
+
+
 def seed_if_empty(db: Session) -> bool:
     """Seed the DB if it has no zones. Returns True if seeding happened."""
     if db.scalar(select(Zone.id).limit(1)) is not None:
         return False
+    geo = load_geometry()
 
     zones = {name: Zone(name=name, center_lat=lat, center_lon=lon) for name, (lat, lon) in ZONES.items()}
     db.add_all(zones.values())
     db.flush()
 
+    nodes: dict[str, RoadNode] = {}
+    for zname, zone in zones.items():
+        for key, (dlat, dlon) in NODE_OFFSETS.items():
+            name = f"{zname} {key}"
+            lat, lon = (geo["nodes"][name] if geo else (round(zone.center_lat + dlat, 6), round(zone.center_lon + dlon, 6)))
+            nodes[name] = RoadNode(name=name, lat=lat, lon=lon, zone_id=zone.id)
+    db.add_all(nodes.values())
+    db.flush()
+
+    def access_for(name):
+        a = geo["shelters"].get(name) if geo else None
+        if not a:
+            return {}
+        options = [dict(node_id=nodes[o["node"]].id, path=o["geometry"], m=o["distance_m"]) for o in a.get("options", [a])]
+        return dict(access_node_id=nodes[a["node"]].id, access_path=a["geometry"], access_m=a["distance_m"],
+                    access_options=options)
+
     db.add_all(
         Shelter(name=n, type=t, zone_id=zones[z].id, lat=la, lon=lo, capacity=cap, current=cur, is_open=True,
-                is_accessible=n not in INACCESSIBLE_SHELTERS)
+                is_accessible=n not in INACCESSIBLE_SHELTERS, **access_for(n))
         for n, t, z, la, lo, cap, cur in SHELTERS
     )
     db.add_all(
         Shelter(name=n, type=t, zone_id=zones[z].id, lat=la, lon=lo, capacity=cap, current=0, is_open=False,
-                is_accessible=acc, is_reserve=True)
+                is_accessible=acc, is_reserve=True, **access_for(n))
         for n, t, z, la, lo, cap, acc in RESERVE_SHELTERS
     )
     db.add_all(Brigade(name=n, status="available", zone_id=zones[z].id) for n, z in BRIGADES)
 
-    nodes: dict[tuple[str, str], RoadNode] = {}
-    for zname, zone in zones.items():
-        for key, (dlat, dlon) in NODE_OFFSETS.items():
-            nodes[(zname, key)] = RoadNode(
-                name=f"{zname} {key}", lat=round(zone.center_lat + dlat, 6),
-                lon=round(zone.center_lon + dlon, 6), zone_id=zone.id,
-            )
-    db.add_all(nodes.values())
-    db.flush()
-
     def accessible(z: str, link: tuple[str, str]) -> bool:
         return link not in INACCESSIBLE_RING and not (z in OLD_TOWN_ZONES and link in OLD_TOWN_EXTRA)
 
-    pairs = [((z, a), (z, b), accessible(z, (a, b))) for z in zones for a, b in INTRA_EDGES]
-    pairs += [(a, b, True) for a, b in INTER_EDGES]
+    pairs = [(f"{z} {a}", f"{z} {b}", accessible(z, (a, b))) for z in zones for a, b in INTRA_EDGES]
+    pairs += [(f"{a[0]} {a[1]}", f"{b[0]} {b[1]}", True) for a, b in INTER_EDGES]
+    edges: list[RoadEdge] = []
+    SEED_REPORT["dropped"].clear()
+    SEED_REPORT["relinked"].clear()
     for a, b, ok in pairs:
         na, nb = nodes[a], nodes[b]
-        db.add(RoadEdge(from_node=na.id, to_node=nb.id, is_closed=False, is_accessible=ok,
-                        length_m=round(haversine_m(na.lat, na.lon, nb.lat, nb.lon), 1)))
+        g = geo["edges"].get(f"{a}|{b}") if geo else None
+        if g and g["distance_m"] > config.MAX_EDGE_DETOUR_RATIO * max(g["straight_m"], 1):
+            SEED_REPORT["dropped"].append(f"{a}–{b} ({g['distance_m'] / g['straight_m']:.2f}x)")
+            continue  # real walk is a big detour: not a sensible direct road
+        edges.append(RoadEdge(from_node=na.id, to_node=nb.id, is_closed=False, is_accessible=ok,
+                              length_m=g["distance_m"] if g else round(haversine_m(na.lat, na.lon, nb.lat, nb.lon), 1),
+                              geometry=g["geometry"] if g else None))
+    # Re-link: a node left without any accessible road gets its shortest remaining road marked accessible.
+    for node in nodes.values():
+        touching = [e for e in edges if node.id in (e.from_node, e.to_node)]
+        if touching and not any(e.is_accessible for e in touching):
+            best = min(touching, key=lambda e: e.length_m)
+            best.is_accessible = True
+            SEED_REPORT["relinked"].append(f"{node.name}: road {best.from_node}-{best.to_node} marked accessible")
+    db.add_all(edges)
     db.commit()
+    if SEED_REPORT["dropped"] or SEED_REPORT["relinked"]:
+        log.warning("road seed adjustments: %s", SEED_REPORT)
     return True

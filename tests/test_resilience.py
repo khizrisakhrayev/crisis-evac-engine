@@ -168,11 +168,12 @@ def test_route_cache_then_static_matrix(client, clock, monkeypatch):
 
 
 def test_cache_rejected_when_a_cached_road_is_closed(client, clock, monkeypatch):
-    warm = route(client)
+    warm = route(client, shelter_id=7)  # cross-district: the route uses roads
+    assert warm["edge_ids"]
     set_mode(client, "down")
     _break_local_graph(monkeypatch)
     client.post(f"/api/roads/{warm['edge_ids'][0]}/close", headers=OP)
-    assert route(client)["provider"] == "static-matrix"
+    assert route(client, shelter_id=7)["provider"] == "static-matrix"
 
 
 def test_priority_citizen_with_external_down(client, clock, monkeypatch):

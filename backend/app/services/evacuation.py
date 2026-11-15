@@ -35,7 +35,7 @@ def _degradation(degraded: bool) -> dict:
 
 def _no_accessible_route() -> dict:
     return dict(shelter=None, path=[], distance_m=None, eta_min=None, rerouted=False,
-                reason="no_accessible_route", original_shelter_id=None, provider=None, edge_ids=[],
+                reason="no_accessible_route", original_shelter_id=None, provider=None, edge_ids=[], approach=[], approach_m=0,
                 accessible=True, needs_medical_transport=True,
                 **_degradation(routing_mode() != "online"))  # no route at all: report the routing mode
 
@@ -95,7 +95,7 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
     graph = load_graph(db)
     try:
         ideal = graph_route(graph, from_lat, from_lon, chosen.lat, chosen.lon, respect_closures=False,
-                            accessible_only=accessible_only)
+                            accessible_only=accessible_only, shelter_id=chosen.id)
         blocked = any(eid in graph.closed for eid in ideal.edge_ids)
     except RoutingUnavailable:
         blocked = False  # no road path even ignoring closures: not a closure problem
@@ -112,7 +112,7 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
     return dict(
         shelter=chosen, path=route.path, distance_m=route.distance_m, eta_min=_eta_min(route.distance_m),
         rerouted=rerouted, reason=reason, original_shelter_id=original_id,
-        provider=route.provider, edge_ids=route.edge_ids,
+        provider=route.provider, edge_ids=route.edge_ids, approach=route.approach, approach_m=route.approach_m,
         accessible=accessible_only, needs_medical_transport=False,
         **_degradation(route.provider != "external"),
     )

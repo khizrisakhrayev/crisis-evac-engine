@@ -21,7 +21,8 @@ def route(client, **params):
 def test_route_basic_external(client):
     r = route(client, shelter_id=STADIUM)
     assert r["provider"] == "external"
-    assert len(r["path"]) >= 3 and r["path"][0] == [ORIGIN["from_lat"], ORIGIN["from_lon"]]
+    assert len(r["path"]) >= 3 and r["approach"][0] == [ORIGIN["from_lat"], ORIGIN["from_lon"]]
+    assert r["approach"][-1] == r["path"][0]  # dashed approach joins the street path at the first road node
     assert r["shelter"]["id"] == STADIUM and {"occupancy_pct", "is_full", "zone"} <= r["shelter"].keys()
     assert r["rerouted"] is False and r["reason"] is None and r["original_shelter_id"] is None
     assert r["distance_m"] > 0 and r["eta_min"] >= 1 and r["edge_ids"]
@@ -78,20 +79,28 @@ def test_external_down_falls_back_to_local_graph(client):
 
 
 def test_disconnected_origin_falls_back_to_static_matrix(client):
-    snap = route(client)["path"][1]  # origin's snapped node
+    from sqlalchemy import select
+
+    from backend.app.db import SessionLocal
+    from backend.app.models import RoadNode, Shelter
+    with SessionLocal() as db:  # an origin node that is no shelter's entry node, so it needs roads to go anywhere
+        entries = {o["node_id"] for s in db.scalars(select(Shelter)) for o in (s.access_options or [])}
+        node = next(n for n in db.scalars(select(RoadNode)) if n.id not in entries)
+        origin = {"from_lat": node.lat, "from_lon": node.lon}
+    snap = [node.lat, node.lon]
     touching = [e["id"] for e in client.get("/api/roads").json()
                 if snap in ([e["from_lat"], e["from_lon"]], [e["to_lat"], e["to_lon"]])]
     assert touching
     for eid in touching:
         client.post(f"/api/roads/{eid}/close", headers=OP)
-    r = route(client)
+    r = client.get("/api/route", params=origin).json()
     assert r["provider"] == "static-matrix" and len(r["path"]) == 2 and r["degraded"] is True
     assert r["rerouted"] is True and r["reason"] == "road_closed"
 
 
 def test_roads_list(client):
     roads = client.get("/api/roads").json()
-    assert len(roads) == 45
+    assert len(roads) == 44  # 45 seeded links minus Sabail C–W (real walk 2.78x straight, dropped by the seed)
     assert {"from_lat", "from_lon", "to_lat", "to_lon", "is_closed", "length_m"} <= roads[0].keys()
 
 

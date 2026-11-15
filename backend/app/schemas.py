@@ -125,7 +125,9 @@ class OccupancyUpdate(BaseModel):
 
 class RouteOut(BaseModel):
     shelter: NearestShelterOut | None  # None only when reason == "no_accessible_route"
-    path: list[list[float]]  # [[lat, lon], ...]; [] when no accessible route
+    path: list[list[float]]  # street geometry [[lat, lon], ...] from the first road node to the shelter; [] if none
+    approach: list[list[float]] = []  # straight leg citizen -> first road node (draw dashed); [] for static-matrix
+    approach_m: int = 0  # included in distance_m / eta_min
     distance_m: int | None
     eta_min: int | None
     rerouted: bool = False
@@ -152,6 +154,7 @@ class RoadOut(BaseModel):
     length_m: float
     is_closed: bool
     is_accessible: bool
+    geometry: list[list[float]]  # real street polyline from -> to
 
 
 class BreakerOut(BaseModel):

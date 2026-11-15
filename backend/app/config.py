@@ -33,4 +33,5 @@ EXTERNAL_SLOW_LATENCY_S = 6.0     # simulated response time in "slow" mode
 BREAKER_FAILURE_THRESHOLD = 2     # consecutive failures (503/timeout) that open the circuit
 BREAKER_COOLDOWN_S = 30           # open -> half_open after this many seconds
 STATIC_MATRIX_DETOUR_FACTOR = 1.3 # haversine x factor when no road distance is known
+MAX_EDGE_DETOUR_RATIO = 2.5      # seed drops a road whose real walking length exceeds this x straight distance
 WALKING_SPEED_KMH = 5

@@ -43,10 +43,12 @@ class ExternalAPITimeout(RoutingUnavailable):
 
 @dataclass
 class RouteResult:
-    path: list[list[float]]
-    distance_m: int
+    path: list[list[float]]          # street geometry: first road node ... shelter entrance
+    distance_m: int                  # total incl. approach
     provider: str
     edge_ids: list[int] = field(default_factory=list)
+    approach: list[list[float]] = field(default_factory=list)  # straight leg: citizen -> first road node
+    approach_m: int = 0
 
 
 class RoutingProvider(Protocol):
@@ -66,9 +68,23 @@ class Graph:
     adj: dict[int, list[tuple[int, int, float]]]  # node -> [(neighbour, edge_id, length_m)]
     closed: set[int]                               # ids of closed edges
     inaccessible: set[int] = field(default_factory=set)  # ids of stairs/steep edges
+    ends: dict[int, tuple[int, int]] = field(default_factory=dict)        # edge -> (from_node, to_node)
+    geometry: dict[int, list[list[float]]] = field(default_factory=dict)  # edge -> street polyline from -> to
+    access: dict[int, list[tuple[int, list[list[float]], float]]] = field(default_factory=dict)  # shelter -> [(node, path, m)]
 
 
 _CACHE_KEY = "road_graph"
+_STATIC: dict = {}  # geometry/access never change after seeding: cached per process
+
+
+def _static(db: Session) -> dict:
+    if not _STATIC:
+        _STATIC["geometry"] = {e.id: e.geometry for e in db.query(RoadEdge).all() if e.geometry}
+        _STATIC["access"] = {
+            s.id: [(o["node_id"], o["path"], o["m"]) for o in (s.access_options or [])]
+            or [(s.access_node_id, s.access_path, s.access_m)]
+            for s in db.query(Shelter).filter(Shelter.access_node_id.isnot(None)).all()}
+    return _STATIC
 
 
 def load_graph(db: Session) -> Graph:
@@ -76,15 +92,18 @@ def load_graph(db: Session) -> Graph:
     if _CACHE_KEY not in db.info:
         nodes = {n.id: (n.lat, n.lon) for n in db.query(RoadNode).all()}
         adj: dict[int, list[tuple[int, int, float]]] = {nid: [] for nid in nodes}
-        closed, inaccessible = set(), set()
-        for e in db.query(RoadEdge).all():
+        closed, inaccessible, ends = set(), set(), {}
+        for e in db.query(RoadEdge.id, RoadEdge.from_node, RoadEdge.to_node, RoadEdge.length_m,
+                           RoadEdge.is_closed, RoadEdge.is_accessible).all():
             adj[e.from_node].append((e.to_node, e.id, e.length_m))
             adj[e.to_node].append((e.from_node, e.id, e.length_m))
+            ends[e.id] = (e.from_node, e.to_node)
             if e.is_closed:
                 closed.add(e.id)
             if not e.is_accessible:
                 inaccessible.add(e.id)
-        db.info[_CACHE_KEY] = Graph(nodes, adj, closed, inaccessible)
+        static = _static(db)
+        db.info[_CACHE_KEY] = Graph(nodes, adj, closed, inaccessible, ends, static["geometry"], static["access"])
     return db.info[_CACHE_KEY]
 
 
@@ -97,21 +116,29 @@ def snap(g: Graph, lat: float, lon: float) -> int:
 
 
 def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=True, provider="local-graph",
-                accessible_only=False) -> RouteResult:
-    """Dijkstra between the nodes nearest to origin and destination. Raises RoutingUnavailable if no path.
+                accessible_only=False, shelter_id: int | None = None) -> RouteResult:
+    """Dijkstra from the node nearest to the origin to the shelter's access node; raises RoutingUnavailable if no path.
 
+    Path follows the stored street geometry (oriented by travel direction) plus the shelter's access path; the
+    straight citizen -> first node leg is returned separately as `approach`.
     respect_closures: skip closed edges. accessible_only: also skip stairs/steep (is_accessible=False) edges.
     """
     if not g.nodes:
         raise RoutingUnavailable("empty road graph")
-    src, dst = snap(g, from_lat, from_lon), snap(g, to_lat, to_lon)
+    src = snap(g, from_lat, from_lon)
+    options = g.access.get(shelter_id) if shelter_id is not None else None
+    if not options:  # no stored access (temporary shelter / unit graphs): nearest node + straight last leg
+        near = snap(g, to_lat, to_lon)
+        options = [(near, [list(g.nodes[near]), [to_lat, to_lon]], haversine_m(*g.nodes[near], to_lat, to_lon))]
+    targets = {node for node, _, _ in options}
     dist = {src: 0.0}
     prev: dict[int, tuple[int, int]] = {}  # node -> (previous node, edge id)
     heap = [(0.0, src)]
     while heap:
         d, u = heapq.heappop(heap)
-        if u == dst:
-            break
+        targets.discard(u)
+        if not targets:
+            break  # every candidate entry node settled
         if d > dist[u]:
             continue
         for v, eid, length in g.adj[u]:
@@ -121,8 +148,10 @@ def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=T
             if nd < dist.get(v, float("inf")):
                 dist[v], prev[v] = nd, (u, eid)
                 heapq.heappush(heap, (nd, v))
-    if dst not in dist:
+    reachable = [(dist[node] + m, node, tail, m) for node, tail, m in options if node in dist]
+    if not reachable:
         raise RoutingUnavailable("no path in road graph")
+    _, dst, tail, tail_m = min(reachable, key=lambda r: r[0])  # cheapest street walk + access path
 
     node_seq, edge_ids, n = [dst], [], dst
     while n != src:
@@ -132,9 +161,21 @@ def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=T
     node_seq.reverse()
     edge_ids.reverse()
 
-    path = [[from_lat, from_lon]] + [list(g.nodes[n]) for n in node_seq] + [[to_lat, to_lon]]
-    total = haversine_m(from_lat, from_lon, *g.nodes[src]) + dist[dst] + haversine_m(*g.nodes[dst], to_lat, to_lon)
-    return RouteResult(path=path, distance_m=round(total), provider=provider, edge_ids=edge_ids)
+    path = [list(g.nodes[src])]
+    for i, eid in enumerate(edge_ids):
+        u, v = node_seq[i], node_seq[i + 1]
+        geom = g.geometry.get(eid)
+        if geom:
+            if g.ends.get(eid, (u, v))[0] != u:
+                geom = geom[::-1]  # stored from -> to; we travel to -> from
+        else:
+            geom = [list(g.nodes[u]), list(g.nodes[v])]
+        path.extend(geom[1:])
+    path.extend(tail[1:])
+    approach_m = haversine_m(from_lat, from_lon, *g.nodes[src])
+    total = approach_m + dist[dst] + tail_m
+    return RouteResult(path=path, distance_m=round(total), provider=provider, edge_ids=edge_ids,
+                       approach=[[from_lat, from_lon], list(g.nodes[src])], approach_m=round(approach_m))
 
 
 # --- circuit breaker for the external API ---------------------------------------
@@ -174,13 +215,14 @@ class ExternalRoutingProvider:
     def __init__(self):
         self.calls = 0  # real (non-skipped) calls, for tests and monitoring
 
-    def _remote(self, graph, from_lat, from_lon, to_lat, to_lon, accessible_only):
+    def _remote(self, graph, from_lat, from_lon, to_lat, to_lon, accessible_only, shelter_id=None):
         mode = config.EXTERNAL_MODE
         if mode == "down_503":
             raise ExternalAPIError(503)
         if mode == "slow":
             _shutdown.wait(config.EXTERNAL_SLOW_LATENCY_S)
-        return graph_route(graph, from_lat, from_lon, to_lat, to_lon, provider=self.name, accessible_only=accessible_only)
+        return graph_route(graph, from_lat, from_lon, to_lat, to_lon, provider=self.name,
+                           accessible_only=accessible_only, shelter_id=shelter_id)
 
     def route(self, db, graph, from_lat, from_lon, shelter, accessible_only=False):
         if not breaker.allow_request():
@@ -188,7 +230,7 @@ class ExternalRoutingProvider:
         self.calls += 1
         try:
             result = _call_with_timeout(
-                lambda: self._remote(graph, from_lat, from_lon, shelter.lat, shelter.lon, accessible_only),
+                lambda: self._remote(graph, from_lat, from_lon, shelter.lat, shelter.lon, accessible_only, shelter.id),
                 config.EXTERNAL_TIMEOUT_S)
         except (ExternalAPIError, ExternalAPITimeout) as e:
             breaker.record_failure(e)
@@ -209,7 +251,7 @@ class LocalGraphProvider:
 
     def route(self, db, graph, from_lat, from_lon, shelter, accessible_only=False):
         return graph_route(graph, from_lat, from_lon, shelter.lat, shelter.lon, provider=self.name,
-                           accessible_only=accessible_only)
+                           accessible_only=accessible_only, shelter_id=shelter.id)
 
 
 class RouteCacheProvider:
@@ -229,10 +271,11 @@ class RouteCacheProvider:
         cached = row.path_json
         if len(cached) < 2:
             raise RoutingUnavailable("bad cache row")
-        # Re-base the first leg on the real start point.
-        distance = row.distance_m - haversine_m(*cached[0], *cached[1]) + haversine_m(from_lat, from_lon, *cached[1])
-        return RouteResult(path=[[from_lat, from_lon]] + cached[1:], distance_m=round(distance),
-                           provider=self.name, edge_ids=list(row.edge_ids_json))
+        # Cached street path starts at the road node; the straight approach is re-built for the real start point.
+        approach_m = haversine_m(from_lat, from_lon, *cached[0])
+        return RouteResult(path=cached, distance_m=round(row.distance_m + approach_m), provider=self.name,
+                           edge_ids=list(row.edge_ids_json), approach=[[from_lat, from_lon], cached[0]],
+                           approach_m=round(approach_m))
 
 
 class StaticMatrixProvider:
@@ -268,7 +311,8 @@ def _remember(db: Session, graph: Graph, from_lat, from_lon, shelter, accessible
         if existing is not None and list(existing) == list(r.edge_ids):
             return
         values = dict(origin_node_id=origin, shelter_id=shelter.id, accessible=bool(accessible_only),
-                      path_json=r.path, distance_m=r.distance_m, edge_ids_json=r.edge_ids, updated_at=utcnow())
+                      path_json=r.path, distance_m=r.distance_m - r.approach_m,  # stored without the approach leg
+                      edge_ids_json=r.edge_ids, updated_at=utcnow())
         stmt = sqlite_insert(RouteCache).values(**values)
         stmt = stmt.on_conflict_do_update(index_elements=["origin_node_id", "shelter_id", "accessible"],
                                           set_={k: stmt.excluded[k] for k in ("path_json", "distance_m",
@@ -316,7 +360,8 @@ def build_distance_matrix(db: Session, force: bool = False) -> int:
     for z in db.scalars(select(Zone)):
         for s in db.scalars(select(Shelter)):
             try:
-                d = graph_route(graph, z.center_lat, z.center_lon, s.lat, s.lon, respect_closures=False).distance_m
+                d = graph_route(graph, z.center_lat, z.center_lon, s.lat, s.lon, respect_closures=False,
+                                shelter_id=s.id).distance_m
             except RoutingUnavailable:
                 d = round(haversine_m(z.center_lat, z.center_lon, s.lat, s.lon) * config.STATIC_MATRIX_DETOUR_FACTOR)
             rows.append(DistanceMatrix(zone_id=z.id, shelter_id=s.id, distance_m=d))
