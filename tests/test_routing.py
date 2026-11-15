@@ -1,10 +1,6 @@
 import pytest
-from sqlalchemy import update
 
 from backend.app import config
-from backend.app.db import SessionLocal
-from backend.app.models import RoadEdge, Shelter
-from backend.app.seed import SHELTERS
 from backend.app.services import routing_provider as rp
 from backend.app.services.geo import haversine_m
 
@@ -13,21 +9,7 @@ ORIGIN = {"from_lat": 40.3777, "from_lon": 49.8920}  # Khatai
 KHATAI_SHELTER = 10  # Khatai District Shelter, capacity 500
 STADIUM = 7  # Tofiq Bahramov Republican Stadium (Narimanov)
 
-
-def _reset():
-    config.EXTERNAL_ROUTING_UP = True
-    with SessionLocal() as db:
-        db.execute(update(RoadEdge).values(is_closed=False))
-        for i, (*_, current) in enumerate(SHELTERS, start=1):
-            db.execute(update(Shelter).where(Shelter.id == i).values(current=current, is_open=True))
-        db.commit()
-
-
-@pytest.fixture(autouse=True)
-def clean_state(client):
-    _reset()
-    yield
-    _reset()
+# Road/shelter/toggle state is reset around every test by the `clean_state` fixture in conftest.py.
 
 
 def route(client, **params):

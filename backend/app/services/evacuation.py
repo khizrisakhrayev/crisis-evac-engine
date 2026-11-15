@@ -1,4 +1,8 @@
-"""Evacuation recommendation: pick a shelter, route to it, reroute when the shelter is full or roads are closed."""
+"""Evacuation recommendation: pick a shelter, route to it, reroute when the shelter is full or roads are closed.
+
+accessible_only (priority citizens): only accessible shelters and accessible edges, never a straight line;
+if nothing is reachable, answer "no_accessible_route" + needs_medical_transport instead of a route.
+"""
 import math
 
 from sqlalchemy.orm import Session
@@ -21,8 +25,18 @@ def _eta_min(distance_m: int) -> int:
     return math.ceil(distance_m / (config.WALKING_SPEED_KMH * 1000 / 60))
 
 
-def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | None = None) -> dict:
+def _no_accessible_route() -> dict:
+    return dict(shelter=None, path=[], distance_m=None, eta_min=None, rerouted=False,
+                reason="no_accessible_route", original_shelter_id=None, provider=None, edge_ids=[],
+                accessible=True, needs_medical_transport=True)
+
+
+def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | None = None,
+              accessible_only: bool = False) -> dict:
     open_items = open_shelters_by_distance(db, from_lat, from_lon)
+    if accessible_only:
+        open_items = [i for i in open_items if i.is_accessible]
+
     if shelter_id is not None:
         s = db.get(Shelter, shelter_id)
         if s is None:
@@ -30,35 +44,50 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
         target = to_nearest_out(s, from_lat, from_lon)
     elif open_items:
         target = open_items[0]
+    elif accessible_only:
+        return _no_accessible_route()
     else:
         raise NoShelterAvailable()
 
-    # 1. Shelter choice: the target unless closed/full (>= REROUTE_OCCUPANCY_PCT, via is_full).
+    # 1. Shelter choice: the target unless closed/full (>= REROUTE_OCCUPANCY_PCT, via is_full)
+    #    or, in accessible mode, not accessible.
     rerouted, reason, original_id = False, None, None
     available = [i for i in open_items if not i.is_full and i.id != target.id]
-    if target.is_open and not target.is_full:
+    unusable_reason = None
+    if accessible_only and not target.is_accessible:
+        unusable_reason = "shelter_not_accessible"
+    elif not target.is_open or target.is_full:
+        unusable_reason = "shelter_full"
+
+    if unusable_reason is None:
         candidates = [target] + available
     elif available:
         candidates = available
-        rerouted, reason, original_id = True, "shelter_full", target.id
+        rerouted, reason, original_id = True, unusable_reason, target.id
+    elif accessible_only:
+        return _no_accessible_route()  # never send a priority citizen to an unusable shelter
     else:
         candidates = [target]
         reason = "all_shelters_full"
 
-    # 2. Route to the first candidate reachable on open roads; straight line only if none is.
+    # 2. Route to the first candidate reachable on open (and, if required, accessible) roads.
     chosen, route = candidates[0], None
     for c in candidates:
         try:
-            route = get_route(db, from_lat, from_lon, c.lat, c.lon, allow_straight_line=False)
+            route = get_route(db, from_lat, from_lon, c.lat, c.lon, allow_straight_line=False,
+                              accessible_only=accessible_only)
             chosen = c
             break
         except RoutingUnavailable:
             continue
+    if route is None and accessible_only:
+        return _no_accessible_route()
 
     # 3. Was the normal (closure-free) shortest path blocked by a closed road?
     graph = load_graph(db)
     try:
-        ideal = graph_route(graph, from_lat, from_lon, chosen.lat, chosen.lon, respect_closures=False)
+        ideal = graph_route(graph, from_lat, from_lon, chosen.lat, chosen.lon, respect_closures=False,
+                            accessible_only=accessible_only)
         blocked = any(eid in graph.closed for eid in ideal.edge_ids)
     except RoutingUnavailable:
         blocked = False  # no road path even ignoring closures: not a closure problem
@@ -76,4 +105,5 @@ def recommend(db: Session, from_lat: float, from_lon: float, shelter_id: int | N
         shelter=chosen, path=route.path, distance_m=route.distance_m, eta_min=_eta_min(route.distance_m),
         rerouted=rerouted, reason=reason, original_shelter_id=original_id,
         provider=route.provider, edge_ids=route.edge_ids,
+        accessible=accessible_only, needs_medical_transport=False,
     )

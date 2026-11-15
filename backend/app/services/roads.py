@@ -7,7 +7,7 @@ from .routing_provider import invalidate_graph
 def _out(e: RoadEdge, nodes: dict[int, RoadNode]) -> dict:
     a, b = nodes[e.from_node], nodes[e.to_node]
     return dict(id=e.id, from_node=e.from_node, to_node=e.to_node, from_lat=a.lat, from_lon=a.lon,
-                to_lat=b.lat, to_lon=b.lon, length_m=e.length_m, is_closed=e.is_closed)
+                to_lat=b.lat, to_lon=b.lon, length_m=e.length_m, is_closed=e.is_closed, is_accessible=e.is_accessible)
 
 
 def list_roads(db: Session) -> list[dict]:

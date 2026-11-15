@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
+from ..errors import api_error
 from ..services.ws import manager
 from .auth import require_role
 
@@ -13,7 +14,7 @@ def overview():
 
 @router.post("/dispatch/alerts/{alert_id}/confirm", dependencies=[Depends(require_role("dispatcher"))])
 def confirm_alert(alert_id: int):
-    raise HTTPException(status_code=501, detail="Not implemented")
+    raise api_error(501, "not_implemented", "Not implemented")
 
 
 @router.websocket("/ws/dispatch")

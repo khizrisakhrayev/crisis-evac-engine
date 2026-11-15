@@ -29,6 +29,9 @@ SHELTERS = [  # name, type, zone, lat, lon, capacity, current
     ("Khatai District Shelter", "shelter", "Khatai", 40.3880, 49.9020, 500, 150),
 ]
 
+# Basement / stair-access shelters: not wheelchair accessible (7 of 10 remain accessible).
+INACCESSIBLE_SHELTERS = {"Nasimi Civil Defence Shelter", "Yasamal School Shelter", "Khatai District Shelter"}
+
 BRIGADES = [  # name, zone
     ("Fire Brigade 1", "Nasimi"),
     ("Medical Team 1", "Sabail"),
@@ -42,6 +45,12 @@ BRIGADES = [  # name, zone
 NODE_OFFSETS = {"C": (0, 0), "N": (0.006, 0), "E": (0, 0.008), "S": (-0.006, 0), "W": (0, -0.008)}
 # Per zone: hub-and-spoke (4) + ring (4) = 8 edges -> 40 total.
 INTRA_EDGES = [("C", "N"), ("C", "E"), ("C", "S"), ("C", "W"), ("N", "E"), ("E", "S"), ("S", "W"), ("W", "N")]
+# Stairs / steep ring links (not wheelchair accessible): 2 per zone + 1 extra in the hilly old-town zones
+# -> 13 inaccessible, 32 accessible (71%). Spokes and inter-zone links stay accessible, so the
+# accessible sub-graph is connected and every zone reaches an accessible shelter.
+INACCESSIBLE_RING = {("E", "S"), ("W", "N")}
+OLD_TOWN_ZONES = {"Nasimi", "Sabail", "Yasamal"}
+OLD_TOWN_EXTRA = {("S", "W")}
 INTER_EDGES = [  # 5 links between neighbouring zones -> 45 total
     (("Sabail", "N"), ("Nasimi", "S")),
     (("Nasimi", "W"), ("Yasamal", "E")),
@@ -61,7 +70,8 @@ def seed_if_empty(db: Session) -> bool:
     db.flush()
 
     db.add_all(
-        Shelter(name=n, type=t, zone_id=zones[z].id, lat=la, lon=lo, capacity=cap, current=cur, is_open=True)
+        Shelter(name=n, type=t, zone_id=zones[z].id, lat=la, lon=lo, capacity=cap, current=cur, is_open=True,
+                is_accessible=n not in INACCESSIBLE_SHELTERS)
         for n, t, z, la, lo, cap, cur in SHELTERS
     )
     db.add_all(Brigade(name=n, status="available", zone_id=zones[z].id) for n, z in BRIGADES)
@@ -76,10 +86,14 @@ def seed_if_empty(db: Session) -> bool:
     db.add_all(nodes.values())
     db.flush()
 
-    pairs = [((z, a), (z, b)) for z in zones for a, b in INTRA_EDGES] + INTER_EDGES
-    for a, b in pairs:
+    def accessible(z: str, link: tuple[str, str]) -> bool:
+        return link not in INACCESSIBLE_RING and not (z in OLD_TOWN_ZONES and link in OLD_TOWN_EXTRA)
+
+    pairs = [((z, a), (z, b), accessible(z, (a, b))) for z in zones for a, b in INTRA_EDGES]
+    pairs += [(a, b, True) for a, b in INTER_EDGES]
+    for a, b, ok in pairs:
         na, nb = nodes[a], nodes[b]
-        db.add(RoadEdge(from_node=na.id, to_node=nb.id,
-                        length_m=round(haversine_m(na.lat, na.lon, nb.lat, nb.lon), 1), is_closed=False))
+        db.add(RoadEdge(from_node=na.id, to_node=nb.id, is_closed=False, is_accessible=ok,
+                        length_m=round(haversine_m(na.lat, na.lon, nb.lat, nb.lon), 1)))
     db.commit()
     return True

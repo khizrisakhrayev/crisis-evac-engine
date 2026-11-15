@@ -12,6 +12,11 @@ SOS_CLUSTER_COUNT = 4
 SOS_CLUSTER_RADIUS_M = 500
 SOS_CLUSTER_WINDOW_MIN = 5
 
+# SOS priority: lower number = more urgent. Labels are codes, translated by the UI.
+SOS_PRIORITY_CRITICAL = 1
+SOS_PRIORITY_NORMAL = 2
+SOS_PRIORITY_LABELS = {SOS_PRIORITY_CRITICAL: "critical", SOS_PRIORITY_NORMAL: "normal"}
+
 # Routing. EXTERNAL_ROUTING_UP is toggled at runtime (POST /api/routing/external/{up|down});
 # always read it as config.EXTERNAL_ROUTING_UP, never `from config import ...`.
 EXTERNAL_ROUTING_UP = True

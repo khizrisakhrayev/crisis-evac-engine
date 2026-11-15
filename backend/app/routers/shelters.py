@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..errors import api_error
 from ..models import Shelter
 from ..schemas import NearestShelterOut, OccupancyUpdate, ShelterOut
 from ..services import geo
@@ -32,14 +33,14 @@ def nearest_shelters(
 ):
     has_point = lat is not None and lon is not None
     if not has_point and not district:
-        raise HTTPException(422, "Provide lat and lon, or district")
+        raise api_error(422, "point_or_district_required", "Provide lat and lon, or district")
     if (lat is None) != (lon is None):
-        raise HTTPException(422, "lat and lon must be given together")
+        raise api_error(422, "lat_lon_together", "lat and lon must be given together")
     zone = None
     if district:
         zone = geo.zone_by_name(district)
         if zone is None:
-            raise HTTPException(404, f"Unknown district: {district}")
+            raise api_error(404, "unknown_district", f"Unknown district: {district}")
     return svc.nearest_shelters(db, lat, lon, zone, limit)
 
 
@@ -48,5 +49,5 @@ def nearest_shelters(
 def update_occupancy(shelter_id: int, body: OccupancyUpdate, db: Session = Depends(get_db)):
     shelter = svc.set_occupancy(db, shelter_id, body.current)
     if shelter is None:
-        raise HTTPException(404, "Shelter not found")
+        raise api_error(404, "shelter_not_found", "Shelter not found")
     return shelter

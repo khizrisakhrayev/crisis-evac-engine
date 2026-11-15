@@ -1,14 +1,15 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..db import get_db
+from ..errors import api_error
 from ..schemas import RoadOut, RouteOut, RoutingStatusOut
 from ..services import evacuation, roads
 from ..services.routing_provider import active_provider
-from .auth import require_role
+from .auth import PRIORITY_ROLES, current_role, require_role
 
 router = APIRouter(tags=["routing"])
 OPERATOR = Depends(require_role("dispatcher", "simulator"))
@@ -19,14 +20,17 @@ def get_route(
     from_lat: float = Query(ge=-90, le=90),
     from_lon: float = Query(ge=-180, le=180),
     shelter_id: int | None = None,
+    accessible: bool = False,
+    role: str = Depends(current_role),
     db: Session = Depends(get_db),
 ):
+    accessible_only = accessible or role in PRIORITY_ROLES  # forced for priority citizens
     try:
-        return evacuation.recommend(db, from_lat, from_lon, shelter_id)
+        return evacuation.recommend(db, from_lat, from_lon, shelter_id, accessible_only=accessible_only)
     except evacuation.ShelterNotFound:
-        raise HTTPException(404, "Shelter not found")
+        raise api_error(404, "shelter_not_found", "Shelter not found")
     except evacuation.NoShelterAvailable:
-        raise HTTPException(503, "No open shelter available")
+        raise api_error(503, "no_open_shelter", "No open shelter available")
 
 
 @router.get("/roads", response_model=list[RoadOut])
@@ -37,7 +41,7 @@ def list_roads(db: Session = Depends(get_db)):
 def _set_closed(db: Session, road_id: int, closed: bool):
     road = roads.set_closed(db, road_id, closed)
     if road is None:
-        raise HTTPException(404, "Road not found")
+        raise api_error(404, "road_not_found", "Road not found")
     return road
 
 

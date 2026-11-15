@@ -33,6 +33,7 @@ class ShelterOut(ORM):
     current: int
     zone_id: int
     is_open: bool
+    is_accessible: bool
 
     @computed_field
     @property
@@ -72,7 +73,14 @@ class SOSOut(ORM):
     hazard_type: str
     status: str
     zone_id: int | None
+    priority: int
+    is_priority_citizen: bool
     created_at: UTCDateTime
+
+    @computed_field
+    @property
+    def priority_label(self) -> str:  # code, translated by the UI
+        return config.SOS_PRIORITY_LABELS.get(self.priority, "normal")
 
 
 class AlertOut(ORM):
@@ -90,15 +98,18 @@ class OccupancyUpdate(BaseModel):
 
 
 class RouteOut(BaseModel):
-    shelter: NearestShelterOut
-    path: list[list[float]]  # [[lat, lon], ...]
-    distance_m: int
-    eta_min: int
+    shelter: NearestShelterOut | None  # None only when reason == "no_accessible_route"
+    path: list[list[float]]  # [[lat, lon], ...]; [] when no accessible route
+    distance_m: int | None
+    eta_min: int | None
     rerouted: bool = False
-    reason: str | None = None  # shelter_full | road_closed | all_shelters_full
+    # shelter_full | road_closed | all_shelters_full | shelter_not_accessible | no_accessible_route
+    reason: str | None = None
     original_shelter_id: int | None = None
-    provider: str  # external | local-graph | straight-line
+    provider: str | None  # external | local-graph | straight-line (never straight-line when accessible)
     edge_ids: list[int] = []
+    accessible: bool = False  # route restricted to wheelchair-accessible edges and shelters
+    needs_medical_transport: bool = False
 
 
 class RoadOut(BaseModel):
@@ -111,6 +122,7 @@ class RoadOut(BaseModel):
     to_lon: float
     length_m: float
     is_closed: bool
+    is_accessible: bool
 
 
 class RoutingStatusOut(BaseModel):

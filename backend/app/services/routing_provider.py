@@ -29,8 +29,9 @@ class RouteResult:
 class RoutingProvider(Protocol):
     name: str
 
-    def route(self, db: Session, from_lat: float, from_lon: float, to_lat: float, to_lon: float) -> RouteResult:
-        """Return a route or raise RoutingUnavailable."""
+    def route(self, db: Session, from_lat: float, from_lon: float, to_lat: float, to_lon: float,
+              accessible_only: bool = False) -> RouteResult:
+        """Return a route or raise RoutingUnavailable. accessible_only: skip non-accessible edges."""
         ...
 
 
@@ -41,6 +42,7 @@ class Graph:
     nodes: dict[int, tuple[float, float]]
     adj: dict[int, list[tuple[int, int, float]]]  # node -> [(neighbour, edge_id, length_m)]
     closed: set[int]                               # ids of closed edges
+    inaccessible: set[int] = field(default_factory=set)  # ids of stairs/steep edges
 
 
 _CACHE_KEY = "road_graph"
@@ -51,13 +53,15 @@ def load_graph(db: Session) -> Graph:
     if _CACHE_KEY not in db.info:
         nodes = {n.id: (n.lat, n.lon) for n in db.query(RoadNode).all()}
         adj: dict[int, list[tuple[int, int, float]]] = {nid: [] for nid in nodes}
-        closed = set()
+        closed, inaccessible = set(), set()
         for e in db.query(RoadEdge).all():
             adj[e.from_node].append((e.to_node, e.id, e.length_m))
             adj[e.to_node].append((e.from_node, e.id, e.length_m))
             if e.is_closed:
                 closed.add(e.id)
-        db.info[_CACHE_KEY] = Graph(nodes, adj, closed)
+            if not e.is_accessible:
+                inaccessible.add(e.id)
+        db.info[_CACHE_KEY] = Graph(nodes, adj, closed, inaccessible)
     return db.info[_CACHE_KEY]
 
 
@@ -69,8 +73,12 @@ def _snap(g: Graph, lat: float, lon: float) -> int:
     return min(g.nodes, key=lambda nid: haversine_m(lat, lon, *g.nodes[nid]))
 
 
-def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=True, provider="local-graph") -> RouteResult:
-    """Dijkstra between the nodes nearest to origin and destination. Raises RoutingUnavailable if no path."""
+def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=True, provider="local-graph",
+                accessible_only=False) -> RouteResult:
+    """Dijkstra between the nodes nearest to origin and destination. Raises RoutingUnavailable if no path.
+
+    respect_closures: skip closed edges. accessible_only: also skip stairs/steep (is_accessible=False) edges.
+    """
     if not g.nodes:
         raise RoutingUnavailable("empty road graph")
     src, dst = _snap(g, from_lat, from_lon), _snap(g, to_lat, to_lon)
@@ -84,7 +92,7 @@ def graph_route(g: Graph, from_lat, from_lon, to_lat, to_lon, respect_closures=T
         if d > dist[u]:
             continue
         for v, eid, length in g.adj[u]:
-            if respect_closures and eid in g.closed:
+            if (respect_closures and eid in g.closed) or (accessible_only and eid in g.inaccessible):
                 continue
             nd = d + length
             if nd < dist.get(v, float("inf")):
@@ -115,27 +123,31 @@ class ExternalRoutingProvider:
     def __init__(self, timeout_s: float | None = None):
         self.timeout_s = config.EXTERNAL_ROUTING_TIMEOUT_S if timeout_s is None else timeout_s
 
-    def route(self, db, from_lat, from_lon, to_lat, to_lon):
+    def route(self, db, from_lat, from_lon, to_lat, to_lon, accessible_only=False):
         if not config.EXTERNAL_ROUTING_UP:
             raise RoutingUnavailable("external routing API is down")
         if config.EXTERNAL_ROUTING_LATENCY_S > self.timeout_s:
             raise RoutingUnavailable("external routing API timed out")
-        return graph_route(load_graph(db), from_lat, from_lon, to_lat, to_lon, provider=self.name)
+        return graph_route(load_graph(db), from_lat, from_lon, to_lat, to_lon, provider=self.name,
+                           accessible_only=accessible_only)
 
 
 class LocalGraphProvider:
     """Dijkstra over the local RoadNode/RoadEdge graph, skipping closed edges."""
     name = "local-graph"
 
-    def route(self, db, from_lat, from_lon, to_lat, to_lon):
-        return graph_route(load_graph(db), from_lat, from_lon, to_lat, to_lon, provider=self.name)
+    def route(self, db, from_lat, from_lon, to_lat, to_lon, accessible_only=False):
+        return graph_route(load_graph(db), from_lat, from_lon, to_lat, to_lon, provider=self.name,
+                           accessible_only=accessible_only)
 
 
 class StraightLineProvider:
-    """Last resort: direct line."""
+    """Last resort: direct line. Never used for accessible-only routing (could cross stairs)."""
     name = "straight-line"
 
-    def route(self, db, from_lat, from_lon, to_lat, to_lon):
+    def route(self, db, from_lat, from_lon, to_lat, to_lon, accessible_only=False):
+        if accessible_only:
+            raise RoutingUnavailable("straight line cannot guarantee an accessible route")
         return RouteResult(path=[[from_lat, from_lon], [to_lat, to_lon]],
                            distance_m=round(haversine_m(from_lat, from_lon, to_lat, to_lon)), provider=self.name)
 
@@ -144,12 +156,15 @@ GRAPH_PROVIDERS: list[RoutingProvider] = [ExternalRoutingProvider(), LocalGraphP
 FALLBACK_PROVIDER: RoutingProvider = StraightLineProvider()
 
 
-def get_route(db, from_lat, from_lon, to_lat, to_lon, allow_straight_line=True) -> RouteResult:
-    """Try providers in order (external -> local-graph [-> straight-line]); first success wins."""
-    providers = GRAPH_PROVIDERS + ([FALLBACK_PROVIDER] if allow_straight_line else [])
+def get_route(db, from_lat, from_lon, to_lat, to_lon, allow_straight_line=True, accessible_only=False) -> RouteResult:
+    """Try providers in order (external -> local-graph [-> straight-line]); first success wins.
+
+    accessible_only never falls back to straight-line.
+    """
+    providers = GRAPH_PROVIDERS + ([FALLBACK_PROVIDER] if allow_straight_line and not accessible_only else [])
     for p in providers:
         try:
-            return p.route(db, from_lat, from_lon, to_lat, to_lon)
+            return p.route(db, from_lat, from_lon, to_lat, to_lon, accessible_only=accessible_only)
         except RoutingUnavailable:
             continue
     raise RoutingUnavailable("no provider could route")

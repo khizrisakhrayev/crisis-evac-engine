@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from . import config
 from .db import Base
 from .services.clock import utcnow  # naive UTC
 
@@ -27,6 +28,7 @@ class Shelter(Base):
     current: Mapped[int] = mapped_column(Integer, default=0)
     zone_id: Mapped[int] = mapped_column(ForeignKey("zones.id"))
     is_open: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_accessible: Mapped[bool] = mapped_column(Boolean, default=True)  # step-free / wheelchair-usable
 
 
 class RoadNode(Base):
@@ -45,6 +47,7 @@ class RoadEdge(Base):
     to_node: Mapped[int] = mapped_column(ForeignKey("road_nodes.id"))
     length_m: Mapped[float] = mapped_column(Float)
     is_closed: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_accessible: Mapped[bool] = mapped_column(Boolean, default=True)  # False = stairs / steep link
 
 
 class SOS(Base):
@@ -60,6 +63,8 @@ class SOS(Base):
     hazard_type: Mapped[str] = mapped_column(String(16))  # fire | collapse | flood | medical
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | safe | resolved
     zone_id: Mapped[int | None] = mapped_column(ForeignKey("zones.id"), nullable=True)
+    priority: Mapped[int] = mapped_column(Integer, default=config.SOS_PRIORITY_NORMAL)  # 1 = critical, 2 = normal
+    is_priority_citizen: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
